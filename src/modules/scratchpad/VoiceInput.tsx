@@ -12,7 +12,7 @@ type Props = {
 };
 
 const DG_URL =
-  "wss://api.deepgram.com/v2/listen?model=nova-2&punctuate=true&smart_format=true";
+  "wss://api.deepgram.com/listen?model=nova-2&punctuate=true&smart_format=true&interim_results=true";
 
 export function VoiceInput({ onTranscript }: Props) {
   const [supported, setSupported] = React.useState(true);
