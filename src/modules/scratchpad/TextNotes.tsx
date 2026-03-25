@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUserStore } from "@/store/userStore";
 import { parseTasks } from "@/modules/scratchpad/parser";
 import { useTaskStore } from "@/store/taskStore";
@@ -71,47 +70,13 @@ export function TextNotes() {
       setSaving(true);
       setStatus("Saving…");
 
-      const supabase = createSupabaseBrowserClient();
-
       try {
-        const { data: note, error: noteErr } = await withTimeout<any>(
-          supabase
-            .from("notes")
-            .insert({
-              user_id: user.id,
-              content: trimmed,
-              parsed: false,
-            })
-            .select("id")
-            .single(),
-          10_000,
-          "Saving note",
-        );
-
-        if (noteErr) throw noteErr;
-
         const parsed = parseTasks(trimmed);
         console.log("[scratchpad] parsed tasks", parsed);
 
-        if (parsed.length > 0) {
-          const optimisticIds = addOptimisticTasks(
-            parsed.map((t) => ({
-              user_id: user.id,
-              title: t.title,
-              description: t.description,
-              due_date: t.due_date,
-              due_time: t.due_time,
-              type: t.type,
-              assigned_to: t.assigned_to,
-              status: "pending",
-              source: "scratchpad",
-            })),
-          );
-
-          const { data: inserted, error: taskErr } = await withTimeout<any>(
-            supabase
-              .from("tasks")
-              .insert(
+        const optimisticIds =
+          parsed.length > 0
+            ? addOptimisticTasks(
                 parsed.map((t) => ({
                   user_id: user.id,
                   title: t.title,
@@ -124,26 +89,29 @@ export function TextNotes() {
                   source: "scratchpad",
                 })),
               )
-              .select("*"),
-            10_000,
-            "Saving tasks",
-          );
+            : [];
 
-          console.log("[scratchpad] insert tasks response", { inserted, taskErr });
-          if (taskErr) throw taskErr;
+        const res = await withTimeout(
+          fetch("/api/scratchpad/save", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ content: trimmed }),
+          }),
+          12_000,
+          "Saving note",
+        );
 
-          // Replace optimistic with real rows in order.
-          (inserted ?? []).forEach((row: any, idx: number) => {
-            const tempId = optimisticIds[idx];
-            if (tempId) replaceOptimistic(tempId, row);
-          });
-
-          await withTimeout(
-            supabase.from("notes").update({ parsed: true }).eq("id", note.id),
-            10_000,
-            "Marking note parsed",
-          );
+        if (!res.ok) {
+          const j = await res.json().catch(() => null);
+          throw new Error(j?.error || `Save failed (${res.status})`);
         }
+
+        const j = (await res.json()) as { tasks?: any[] };
+        const inserted = j.tasks ?? [];
+        inserted.forEach((row: any, idx: number) => {
+          const tempId = optimisticIds[idx];
+          if (tempId) replaceOptimistic(tempId, row);
+        });
 
         lastSavedRef.current = trimmed;
         setStatus("Saved");
