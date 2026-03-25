@@ -59,7 +59,7 @@ export function TextNotes() {
   }
 
   const save = React.useCallback(
-    async (opts?: { reason: "autosave" | "blur" | "interval" }) => {
+    async (opts?: { reason: "enter" | "autosave" | "blur" | "interval" }) => {
       if (!user) return;
       if (inFlightRef.current) return;
       const trimmed = contentRef.current.trim();
@@ -131,18 +131,7 @@ export function TextNotes() {
     [addOptimisticTasks, replaceOptimistic, user],
   );
 
-  const { debounced: debouncedSave } = useDebouncedCallback(
-    () => void save({ reason: "autosave" }),
-    900,
-  );
-
-  React.useEffect(() => {
-    if (!user) return;
-    const id = window.setInterval(() => {
-      void save({ reason: "interval" });
-    }, 10_000);
-    return () => window.clearInterval(id);
-  }, [save, user]);
+  // Enter-to-save; no debounced autosave to avoid duplicate task creation.
 
   return (
     <div className="space-y-3">
@@ -165,20 +154,26 @@ export function TextNotes() {
           "placeholder:text-muted-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
         ].join(" ")}
-        placeholder="Write notes… Use '-' or '[ ]' to mark tasks."
+        placeholder="Type a note, then press Enter to save. Use Shift+Enter for a new line."
         value={content}
         onChange={(e) => {
           const next = e.target.value;
           setContent(next);
           contentRef.current = next;
-          debouncedSave();
         }}
-        onBlur={() => void save({ reason: "blur" })}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void save({ reason: "autosave" });
+          }
+        }}
       />
 
       <div className="text-xs text-muted-foreground">
-        Autosaves after you pause typing. Tasks detected by keywords or lines starting with{" "}
-        <span className="font-mono">-</span> / <span className="font-mono">[ ]</span>.
+        Press <span className="font-mono">Enter</span> to save. Use{" "}
+        <span className="font-mono">Shift+Enter</span> for new lines. Tasks detected by keywords or
+        lines starting with <span className="font-mono">-</span> /{" "}
+        <span className="font-mono">[ ]</span>.
       </div>
     </div>
   );
