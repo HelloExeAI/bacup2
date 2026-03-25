@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 export type TaskStatus = "pending" | "done";
 export type TaskSource = "scratchpad" | "manual" | "ai";
+export type TaskType = "todo" | "followup" | "reminder";
 
 export type Task = {
   id: string;
@@ -9,6 +10,9 @@ export type Task = {
   title: string;
   description: string | null;
   due_date: string | null; // YYYY-MM-DD
+  due_time: string | null; // HH:MM (24h)
+  type: TaskType;
+  assigned_to: string;
   status: TaskStatus;
   source: TaskSource;
   created_at: string;

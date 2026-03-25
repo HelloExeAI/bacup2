@@ -1,7 +1,10 @@
 export type ParsedTask = {
   title: string;
   description: string;
+  type: "todo" | "followup" | "reminder";
+  assigned_to: string;
   due_date: string | null; // YYYY-MM-DD
+  due_time: string | null; // HH:MM (24h)
 };
 
 const KEYWORDS = [
@@ -14,6 +17,8 @@ const KEYWORDS = [
   "meeting",
 ] as const;
 
+const FOLLOWUP_HINTS = ["ask", "tell", "follow up with", "check with"] as const;
+
 function isTaskLine(raw: string) {
   const s = raw.trim();
   if (!s) return false;
@@ -21,7 +26,11 @@ function isTaskLine(raw: string) {
   if (s.startsWith("[ ]")) return true;
 
   const lower = s.toLowerCase();
-  return KEYWORDS.some((k) => lower.includes(k));
+  return (
+    KEYWORDS.some((k) => lower.includes(k)) ||
+    lower.includes("remind me") ||
+    FOLLOWUP_HINTS.some((k) => lower.includes(k))
+  );
 }
 
 function cleanTitle(raw: string) {
@@ -73,6 +82,61 @@ function parseDueDate(line: string, now = new Date()): string | null {
   return null;
 }
 
+function toDueTime24h(line: string): string | null {
+  const s = line.toLowerCase();
+
+  // 14:00 / 9:05
+  const h24 = s.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if (h24) {
+    const hh = Number(h24[1]);
+    const mm = Number(h24[2]);
+    return `${pad2(hh)}:${pad2(mm)}`;
+  }
+
+  // 5pm / 5 pm / 11am
+  const h12 = s.match(/\b(1[0-2]|0?[1-9])\s*(am|pm)\b/);
+  if (h12) {
+    let hh = Number(h12[1]);
+    const mm = 0;
+    const ampm = h12[2];
+    if (ampm === "pm" && hh !== 12) hh += 12;
+    if (ampm === "am" && hh === 12) hh = 0;
+    return `${pad2(hh)}:${pad2(mm)}`;
+  }
+
+  return null;
+}
+
+function extractAssignedTo(line: string): string | null {
+  const s = line.trim();
+
+  // "ask John ..." or "tell Sarah ..."
+  const m1 = s.match(/^\s*(ask|tell)\s+([A-Z][a-zA-Z]+)\b/);
+  if (m1) return m1[2] ?? null;
+
+  // "follow up with John ..." / "check with John ..."
+  const m2 = s.match(/\b(follow up with|check with)\s+([A-Z][a-zA-Z]+)\b/i);
+  if (m2) return m2[2] ?? null;
+
+  return null;
+}
+
+function classify(line: string) {
+  const lower = line.toLowerCase();
+  const dueTime = toDueTime24h(line);
+
+  if (lower.includes("remind me") || /\bat\s+/.test(lower) && dueTime) {
+    return { type: "reminder" as const, assigned_to: "self" };
+  }
+
+  if (FOLLOWUP_HINTS.some((k) => lower.includes(k))) {
+    const name = extractAssignedTo(line);
+    return { type: "followup" as const, assigned_to: name ?? "self" };
+  }
+
+  return { type: "todo" as const, assigned_to: "self" };
+}
+
 export function parseTasks(content: string): ParsedTask[] {
   const lines = content.split("\n");
   const tasks: ParsedTask[] = [];
@@ -83,10 +147,14 @@ export function parseTasks(content: string): ParsedTask[] {
     const title = cleanTitle(raw);
     if (!title) continue;
 
+    const meta = classify(raw);
     tasks.push({
       title,
       description: raw.trim(),
+      type: meta.type,
+      assigned_to: meta.assigned_to,
       due_date: parseDueDate(raw),
+      due_time: toDueTime24h(raw),
     });
   }
 
