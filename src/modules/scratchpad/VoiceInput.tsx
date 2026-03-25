@@ -82,19 +82,36 @@ export function VoiceInput({ onTranscript }: Props) {
     setError(null);
     if (!supported) return;
 
-    const apiKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY;
-    if (!apiKey) {
-      setError(
-        "Missing NEXT_PUBLIC_DEEPGRAM_API_KEY. Add it to /Users/farooq/Desktop/bacup2/.env.local and restart dev server.",
-      );
-      return;
+    // Prefer short-lived token minted server-side (no key exposure).
+    let authToken: string | null = null;
+    try {
+      const tRes = await fetch("/api/deepgram/token", { method: "POST" });
+      const tJson = await tRes.json().catch(() => null);
+      if (tRes.ok && tJson?.access_token) authToken = String(tJson.access_token);
+      if (!tRes.ok) {
+        throw new Error(tJson?.error || `Deepgram token error (${tRes.status})`);
+      }
+    } catch (e) {
+      // Fallback to public key if provided (dev only).
+      authToken = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ?? null;
+      if (!authToken) {
+        const msg =
+          e instanceof Error ? e.message : "Deepgram token fetch failed.";
+        setError(msg);
+        return;
+      }
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      const ws = new WebSocket(DG_URL, ["token", apiKey]);
+      if (!authToken) {
+        setError("Deepgram auth token missing.");
+        return;
+      }
+
+      const ws = new WebSocket(DG_URL, ["token", authToken]);
       wsRef.current = ws;
 
       ws.onopen = () => {
