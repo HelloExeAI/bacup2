@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { fetchMyProfile, fetchMyTasks } from "@/lib/supabase/queries";
+import { fetchMyEvents, fetchMyProfile, fetchMyTasks } from "@/lib/supabase/queries";
 import { useUserStore } from "@/store/userStore";
 import { useTaskStore } from "@/store/taskStore";
+import { useEventStore } from "@/store/eventStore";
 
 export function AuthBootstrap({ children }: { children: React.ReactNode }) {
   const setUser = useUserStore((s) => s.setUser);
@@ -12,6 +13,8 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
   const clear = useUserStore((s) => s.clear);
   const setTasks = useTaskStore((s) => s.setTasks);
   const clearTasks = useTaskStore((s) => s.clear);
+  const setEvents = useEventStore((s) => s.setEvents);
+  const clearEvents = useEventStore((s) => s.clear);
 
   React.useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -27,6 +30,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       if (error) {
         clear();
         clearTasks();
+        clearEvents();
         return;
       }
 
@@ -36,6 +40,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       if (!user) {
         setProfile(null);
         clearTasks();
+        clearEvents();
         return;
       }
 
@@ -52,6 +57,13 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       } catch {
         if (!cancelled) setTasks([]);
       }
+
+      try {
+        const events = await fetchMyEvents(supabase);
+        if (!cancelled) setEvents(events);
+      } catch {
+        if (!cancelled) setEvents([]);
+      }
     }
 
     hydrate();
@@ -63,6 +75,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       if (!user) {
         setProfile(null);
         clearTasks();
+        clearEvents();
         return;
       }
 
@@ -79,13 +92,20 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       } catch {
         setTasks([]);
       }
+
+      try {
+        const events = await fetchMyEvents(supabase);
+        setEvents(events);
+      } catch {
+        setEvents([]);
+      }
     });
 
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [clear, clearTasks, setProfile, setTasks, setUser]);
+  }, [clear, clearEvents, clearTasks, setEvents, setProfile, setTasks, setUser]);
 
   return <>{children}</>;
 }
