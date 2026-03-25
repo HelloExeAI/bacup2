@@ -5,7 +5,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { parseTasks } from "@/modules/scratchpad/parser";
 
 const BodySchema = z.object({
-  content: z.string().min(1).max(50_000),
+  transcript: z.string().min(1).max(200_000),
+  create_children: z.boolean().optional().default(false),
 });
 
 export async function POST(req: Request) {
@@ -25,18 +26,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const content = parsedBody.data.content.trim();
-  const taskDrafts = parseTasks(content);
+  const transcript = parsedBody.data.transcript.trim();
+  const drafts = parseTasks(transcript);
 
-  // Write as the signed-in user; RLS enforces per-user access.
   const { data: note, error: noteErr } = await supabase
     .from("notes")
     .insert({
       user_id: user.id,
-      content,
-      type: "text",
+      content: transcript,
+      type: "voice",
       parent_id: null,
-      parsed: taskDrafts.length > 0,
+      parsed: drafts.length > 0,
     })
     .select("id")
     .single();
@@ -45,14 +45,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: noteErr.message }, { status: 500 });
   }
 
-  if (taskDrafts.length === 0) {
+  if (parsedBody.data.create_children) {
+    const lines = transcript
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .slice(0, 200);
+    if (lines.length > 0) {
+      await supabase.from("notes").insert(
+        lines.map((content) => ({
+          user_id: user.id,
+          content,
+          type: "voice",
+          parent_id: note.id,
+          parsed: false,
+        })),
+      );
+    }
+  }
+
+  if (drafts.length === 0) {
     return NextResponse.json({ note_id: note.id, tasks: [] });
   }
 
   const { data: tasks, error: taskErr } = await supabase
     .from("tasks")
     .insert(
-      taskDrafts.map((t) => ({
+      drafts.map((t) => ({
         user_id: user.id,
         title: t.title,
         description: t.description,
