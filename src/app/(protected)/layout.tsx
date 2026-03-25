@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AuthBootstrap } from "@/modules/auth/AuthBootstrap";
-import { DashboardShell } from "@/components/layout/DashboardShell";
+import { AppLayout } from "@/components/layout/AppLayout";
 
 export default async function ProtectedLayout({
   children,
@@ -17,7 +17,7 @@ export default async function ProtectedLayout({
 
   return (
     <AuthBootstrap>
-      <DashboardShell>{children}</DashboardShell>
+      <AppLayout>{children}</AppLayout>
     </AuthBootstrap>
   );
 }
