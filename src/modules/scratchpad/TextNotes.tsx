@@ -5,6 +5,7 @@ import { useUserStore } from "@/store/userStore";
 import { parseTasks } from "@/modules/scratchpad/parser";
 import { useTaskStore } from "@/store/taskStore";
 import { VoiceInput } from "@/modules/scratchpad/VoiceInput";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function useDebouncedCallback<T extends (...args: any[]) => void>(cb: T, delayMs: number) {
   const cbRef = React.useRef(cb);
@@ -36,6 +37,7 @@ export function TextNotes() {
   const [content, setContent] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [status, setStatus] = React.useState<string | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
   const addOptimisticTasks = useTaskStore((s) => s.addOptimisticTasks);
   const replaceOptimistic = useTaskStore((s) => s.replaceOptimistic);
 
@@ -133,6 +135,31 @@ export function TextNotes() {
   );
 
   // Enter-to-save; no debounced autosave to avoid duplicate task creation.
+  React.useEffect(() => {
+    if (!user || loaded) return;
+    const supabase = createSupabaseBrowserClient();
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("notes")
+          .select("content,created_at,type")
+          .is("parent_id", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        if (data?.content) {
+          setContent(data.content);
+          contentRef.current = data.content;
+          lastSavedRef.current = data.content.trim();
+        }
+      } catch (e) {
+        console.error("[scratchpad] load latest note failed", e);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [loaded, user]);
 
   return (
     <div className="space-y-3">
@@ -144,7 +171,7 @@ export function TextNotes() {
           ) : saving ? (
             <div className="text-sm text-muted-foreground">Saving…</div>
           ) : (
-            <div className="text-sm text-muted-foreground">Autosave</div>
+            <div className="text-sm text-muted-foreground">Enter to save</div>
           )}
         </div>
       </div>
