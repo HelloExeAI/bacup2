@@ -84,20 +84,17 @@ export function VoiceInput({ onTranscript }: Props) {
 
     // Prefer short-lived token minted server-side (no key exposure).
     let authToken: string | null = null;
-    try {
-      const tRes = await fetch("/api/deepgram/token", { method: "POST" });
-      const tJson = await tRes.json().catch(() => null);
-      if (tRes.ok && tJson?.access_token) authToken = String(tJson.access_token);
-      if (!tRes.ok) {
-        throw new Error(tJson?.error || `Deepgram token error (${tRes.status})`);
-      }
-    } catch (e) {
-      // Fallback to public key if provided (dev only).
-      authToken = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ?? null;
-      if (!authToken) {
-        const msg =
-          e instanceof Error ? e.message : "Deepgram token fetch failed.";
-        setError(msg);
+    const tRes = await fetch("/api/deepgram/token", { method: "POST" });
+    const tJson = await tRes.json().catch(() => null);
+    if (tRes.ok && tJson?.access_token) authToken = String(tJson.access_token);
+
+    if (!authToken) {
+      // Optional dev fallback (exposes key to browser).
+      const devKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ?? null;
+      if (devKey) {
+        authToken = devKey;
+      } else {
+        setError(tJson?.error || `Deepgram token error (${tRes.status})`);
         return;
       }
     }
