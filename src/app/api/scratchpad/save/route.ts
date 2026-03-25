@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { parseTasks } from "@/modules/scratchpad/parser";
 
 const BodySchema = z.object({
@@ -29,9 +28,8 @@ export async function POST(req: Request) {
   const content = parsedBody.data.content.trim();
   const taskDrafts = parseTasks(content);
 
-  const admin = createSupabaseAdminClient();
-
-  const { data: note, error: noteErr } = await admin
+  // Write as the signed-in user; RLS enforces per-user access.
+  const { data: note, error: noteErr } = await supabase
     .from("notes")
     .insert({ user_id: user.id, content, parsed: taskDrafts.length > 0 })
     .select("id")
@@ -45,7 +43,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ note_id: note.id, tasks: [] });
   }
 
-  const { data: tasks, error: taskErr } = await admin
+  const { data: tasks, error: taskErr } = await supabase
     .from("tasks")
     .insert(
       taskDrafts.map((t) => ({
