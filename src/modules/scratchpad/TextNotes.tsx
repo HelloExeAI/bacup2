@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Button } from "@/components/ui/button";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUserStore } from "@/store/userStore";
 import { parseTasks } from "@/modules/scratchpad/parser";
@@ -42,16 +41,20 @@ export function TextNotes() {
   const removeByIds = useTaskStore((s) => s.removeByIds);
 
   const lastSavedRef = React.useRef<string>("");
+  const contentRef = React.useRef<string>("");
+  React.useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   const save = React.useCallback(
-    async (opts?: { reason: "manual" | "autosave" }) => {
+    async (opts?: { reason: "autosave" | "blur" | "interval" }) => {
       if (!user) return;
-      const trimmed = content.trim();
+      const trimmed = contentRef.current.trim();
       if (!trimmed) return;
-      if (trimmed === lastSavedRef.current && opts?.reason !== "manual") return;
+      if (trimmed === lastSavedRef.current) return;
 
       setSaving(true);
-      setStatus(opts?.reason === "autosave" ? "Autosaving…" : "Saving…");
+      setStatus("Saving…");
 
       const supabase = createSupabaseBrowserClient();
 
@@ -127,7 +130,7 @@ export function TextNotes() {
         setSaving(false);
       }
     },
-    [addOptimisticTasks, content, replaceOptimistic, user],
+    [addOptimisticTasks, replaceOptimistic, user],
   );
 
   const { debounced: debouncedSave } = useDebouncedCallback(
@@ -135,19 +138,26 @@ export function TextNotes() {
     900,
   );
 
+  React.useEffect(() => {
+    if (!user) return;
+    const id = window.setInterval(() => {
+      void save({ reason: "interval" });
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [save, user]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Scratchpad</h1>
         <div className="flex items-center gap-3">
-          {status ? <div className="text-sm text-muted-foreground">{status}</div> : null}
-          <Button
-            type="button"
-            onClick={() => void save({ reason: "manual" })}
-            disabled={saving || !user}
-          >
-            Save
-          </Button>
+          {status ? (
+            <div className="text-sm text-muted-foreground">{status}</div>
+          ) : saving ? (
+            <div className="text-sm text-muted-foreground">Saving…</div>
+          ) : (
+            <div className="text-sm text-muted-foreground">Autosave</div>
+          )}
         </div>
       </div>
 
@@ -160,14 +170,17 @@ export function TextNotes() {
         placeholder="Write notes… Use '-' or '[ ]' to mark tasks."
         value={content}
         onChange={(e) => {
-          setContent(e.target.value);
+          const next = e.target.value;
+          setContent(next);
+          contentRef.current = next;
           debouncedSave();
         }}
+        onBlur={() => void save({ reason: "blur" })}
       />
 
       <div className="text-xs text-muted-foreground">
-        Task detection: keywords (call/send/follow up/fix/complete/schedule/meeting) or lines starting
-        with <span className="font-mono">-</span> or <span className="font-mono">[ ]</span>.
+        Autosaves after you pause typing. Tasks detected by keywords or lines starting with{" "}
+        <span className="font-mono">-</span> / <span className="font-mono">[ ]</span>.
       </div>
     </div>
   );
