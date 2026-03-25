@@ -35,24 +35,26 @@ export function AuthForm() {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              name: name.trim() || null,
+            },
+          },
         });
         if (signUpError) throw signUpError;
 
         const user = data.user;
         setUser(user ?? null);
 
-        if (user) {
-          const { error: profileError } = await supabase.from("profiles").insert({
-            id: user.id,
-            name: name.trim() || null,
-            role: "member",
-          });
-          if (profileError) throw profileError;
-
-          const profile = await fetchMyProfile(supabase);
-          setProfile(profile);
+        // If email confirmation is enabled, session may be null here.
+        if (!data.session) {
+          setError("Check your email to confirm your account, then login.");
+          setMode("login");
+          return;
         }
 
+        const profile = await fetchMyProfile(supabase);
+        setProfile(profile);
         router.replace("/dashboard");
         return;
       }
@@ -69,9 +71,18 @@ export function AuthForm() {
       setProfile(profile);
       router.replace("/dashboard");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong. Try again.";
-      setError(message);
+      if (err instanceof TypeError && /fetch/i.test(err.message)) {
+        setError(
+          "Network error: couldn't reach Supabase (Failed to fetch). Check NEXT_PUBLIC_SUPABASE_URL, your internet/DNS, and that the Supabase project is reachable from this network.",
+        );
+      } else {
+        const anyErr = err as unknown as { message?: string; error_description?: string };
+        const message =
+          err instanceof Error
+            ? err.message
+            : anyErr?.message || anyErr?.error_description || "Something went wrong. Try again.";
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
