@@ -45,6 +45,15 @@ export function VoiceInput({ onTranscript }: Props) {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
 
+    // Ask Deepgram to flush and close cleanly.
+    try {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "Finalize" }));
+        ws.send(JSON.stringify({ type: "CloseStream" }));
+      }
+    } catch {}
+
     try {
       wsRef.current?.close();
     } catch {}
@@ -159,7 +168,8 @@ export function VoiceInput({ onTranscript }: Props) {
       ws.onerror = () => setError("Deepgram WebSocket error.");
       ws.onclose = (evt) => {
         // Helpful for diagnosing auth/format issues.
-        if (evt.code !== 1000) {
+        // 1000 = normal, 1005 = no status (treat as normal for some browsers), 1006 = abnormal.
+        if (![1000, 1005].includes(evt.code)) {
           setError(`Deepgram closed (${evt.code}) ${evt.reason || ""}`.trim());
         }
         wsRef.current = null;
