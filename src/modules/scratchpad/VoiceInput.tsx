@@ -12,7 +12,7 @@ type Props = {
 };
 
 const DG_URL =
-  "wss://api.deepgram.com/v1/listen?model=nova-2&punctuate=true&smart_format=true";
+  "wss://api.deepgram.com/v2/listen?model=nova-2&punctuate=true&smart_format=true";
 
 export function VoiceInput({ onTranscript }: Props) {
   const [supported, setSupported] = React.useState(true);
@@ -138,7 +138,11 @@ export function VoiceInput({ onTranscript }: Props) {
       };
 
       ws.onerror = () => setError("Deepgram WebSocket error.");
-      ws.onclose = () => {
+      ws.onclose = (evt) => {
+        // Helpful for diagnosing auth/format issues.
+        if (evt.code !== 1000) {
+          setError(`Deepgram closed (${evt.code}) ${evt.reason || ""}`.trim());
+        }
         wsRef.current = null;
         recorderRef.current = null;
       };
