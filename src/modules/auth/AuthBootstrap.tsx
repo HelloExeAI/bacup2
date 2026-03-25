@@ -2,13 +2,16 @@
 
 import * as React from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { fetchMyProfile } from "@/lib/supabase/queries";
+import { fetchMyProfile, fetchMyTasks } from "@/lib/supabase/queries";
 import { useUserStore } from "@/store/userStore";
+import { useTaskStore } from "@/store/taskStore";
 
 export function AuthBootstrap({ children }: { children: React.ReactNode }) {
   const setUser = useUserStore((s) => s.setUser);
   const setProfile = useUserStore((s) => s.setProfile);
   const clear = useUserStore((s) => s.clear);
+  const setTasks = useTaskStore((s) => s.setTasks);
+  const clearTasks = useTaskStore((s) => s.clear);
 
   React.useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -23,6 +26,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       if (error) {
         clear();
+        clearTasks();
         return;
       }
 
@@ -31,6 +35,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
 
       if (!user) {
         setProfile(null);
+        clearTasks();
         return;
       }
 
@@ -39,6 +44,13 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
         if (!cancelled) setProfile(profile);
       } catch {
         if (!cancelled) setProfile(null);
+      }
+
+      try {
+        const tasks = await fetchMyTasks(supabase);
+        if (!cancelled) setTasks(tasks);
+      } catch {
+        if (!cancelled) setTasks([]);
       }
     }
 
@@ -50,6 +62,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
 
       if (!user) {
         setProfile(null);
+        clearTasks();
         return;
       }
 
@@ -59,13 +72,20 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
       } catch {
         setProfile(null);
       }
+
+      try {
+        const tasks = await fetchMyTasks(supabase);
+        setTasks(tasks);
+      } catch {
+        setTasks([]);
+      }
     });
 
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [clear, setProfile, setUser]);
+  }, [clear, clearTasks, setProfile, setTasks, setUser]);
 
   return <>{children}</>;
 }
