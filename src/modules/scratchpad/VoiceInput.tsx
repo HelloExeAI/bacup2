@@ -12,7 +12,7 @@ type Props = {
 };
 
 const DG_URL =
-  "wss://api.deepgram.com/listen?model=nova-2&punctuate=true&smart_format=true&interim_results=true";
+  "wss://api.deepgram.com/v1/listen?model=nova-2&punctuate=true&smart_format=true&interim_results=true";
 
 export function VoiceInput({ onTranscript }: Props) {
   const [supported, setSupported] = React.useState(true);
@@ -83,16 +83,16 @@ export function VoiceInput({ onTranscript }: Props) {
     if (!supported) return;
 
     // Prefer short-lived token minted server-side (no key exposure).
-    let authToken: string | null = null;
+    let bearerToken: string | null = null;
     const tRes = await fetch("/api/deepgram/token", { method: "POST" });
     const tJson = await tRes.json().catch(() => null);
-    if (tRes.ok && tJson?.access_token) authToken = String(tJson.access_token);
+    if (tRes.ok && tJson?.access_token) bearerToken = String(tJson.access_token);
 
-    if (!authToken) {
+    if (!bearerToken) {
       // Optional dev fallback (exposes key to browser).
       const devKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY ?? null;
       if (devKey) {
-        authToken = devKey;
+        bearerToken = devKey;
       } else {
         setError(tJson?.error || `Deepgram token error (${tRes.status})`);
         return;
@@ -103,12 +103,17 @@ export function VoiceInput({ onTranscript }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      if (!authToken) {
+      if (!bearerToken) {
         setError("Deepgram auth token missing.");
         return;
       }
 
-      const ws = new WebSocket(DG_URL, ["token", authToken]);
+      // Deepgram browser auth:
+      // - API key: Sec-WebSocket-Protocol: token, <api_key>
+      // - JWT from /auth/grant: Sec-WebSocket-Protocol: bearer, <jwt>
+      const isJwt = bearerToken.split(".").length === 3;
+      const protocol = isJwt ? "bearer" : "token";
+      const ws = new WebSocket(DG_URL, [protocol, bearerToken]);
       wsRef.current = ws;
 
       ws.onopen = () => {
