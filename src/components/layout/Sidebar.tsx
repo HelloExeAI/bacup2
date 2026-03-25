@@ -19,7 +19,9 @@ function NavItem({ href, label }: { href: string; label: string }) {
       href={href}
       className={[
         "flex h-10 items-center rounded-md px-3 text-sm transition-colors",
-        active ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:bg-background/60",
       ].join(" ")}
     >
       {label}
@@ -29,10 +31,15 @@ function NavItem({ href, label }: { href: string; label: string }) {
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-border bg-background md:block">
+    <aside className="hidden w-72 shrink-0 border-r border-border bg-background md:block">
+      <div className="flex h-14 items-center gap-2 border-b border-border px-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+          Bc
+        </div>
+        <div className="text-sm font-semibold">Bacup</div>
+      </div>
       <div className="p-3">
-        <div className="px-3 py-2 text-sm font-semibold">Bacup</div>
-        <nav className="space-y-1">
+        <nav className="space-y-1 px-1">
           {navItems.map((i) => (
             <NavItem key={i.href} href={i.href} label={i.label} />
           ))}
