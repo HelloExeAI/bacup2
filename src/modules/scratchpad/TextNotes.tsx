@@ -4,6 +4,7 @@ import * as React from "react";
 import { useUserStore } from "@/store/userStore";
 import { parseTasks } from "@/modules/scratchpad/parser";
 import { useTaskStore } from "@/store/taskStore";
+import { VoiceInput } from "@/modules/scratchpad/VoiceInput";
 
 function useDebouncedCallback<T extends (...args: any[]) => void>(cb: T, delayMs: number) {
   const cbRef = React.useRef(cb);
@@ -147,6 +148,16 @@ export function TextNotes() {
           )}
         </div>
       </div>
+
+      <VoiceInput
+        onTranscript={(text) => {
+          const next = contentRef.current
+            ? `${contentRef.current}\n${text}`
+            : text;
+          setContent(next);
+          contentRef.current = next;
+        }}
+      />
 
       <textarea
         className={[
