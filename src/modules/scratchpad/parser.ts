@@ -59,6 +59,11 @@ function nextWeekday(base: Date, weekday: number) {
 function parseDueDate(line: string, now = new Date()): string | null {
   const s = line.toLowerCase();
   if (s.includes("today")) return toYmd(now);
+  if (s.includes("yesterday")) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 1);
+    return toYmd(d);
+  }
   if (s.includes("tomorrow")) {
     const d = new Date(now);
     d.setDate(d.getDate() + 1);
