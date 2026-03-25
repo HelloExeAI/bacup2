@@ -1,12 +1,24 @@
 "use client";
 
+import * as React from "react";
+import { useTaskStore } from "@/store/taskStore";
+import { StrategyEngine } from "@/modules/ai/StrategyEngine";
+
 export function AskSAM() {
+  const tasks = useTaskStore((s) => s.tasks);
+
+  const suggestions = React.useMemo(() => {
+    const engine = new StrategyEngine();
+    return engine.generateSuggestions(tasks);
+  }, [tasks]);
+
   return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <div className="text-sm font-medium">Ask SAM</div>
-      <div className="mt-1 text-sm text-muted-foreground">
-        Placeholder module. Logic will be implemented next.
-      </div>
+    <div className="mt-2 space-y-2">
+      {suggestions.map((s, idx) => (
+        <div key={`${idx}-${s}`} className="rounded-md border border-border p-2">
+          <div className="text-sm text-foreground">{s}</div>
+        </div>
+      ))}
     </div>
   );
 }
