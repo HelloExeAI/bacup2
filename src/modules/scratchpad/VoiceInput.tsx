@@ -27,6 +27,31 @@ export function VoiceInput({ onTranscript }: Props) {
   const wsRef = React.useRef<WebSocket | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
+  const transcriptRef = React.useRef<string>("");
+  const lastFinalChunkRef = React.useRef<string>("");
+
+  function normalizeChunk(s: string) {
+    return s.trim().replace(/\s+/g, " ");
+  }
+
+  function appendFinalChunk(chunk: string) {
+    const c = normalizeChunk(chunk);
+    if (!c) return;
+
+    // Drop duplicates (Deepgram can resend final chunks).
+    if (normalizeChunk(lastFinalChunkRef.current) === c) return;
+    lastFinalChunkRef.current = c;
+
+    const current = transcriptRef.current;
+    const normCurrent = normalizeChunk(current);
+
+    // Avoid appending if it's already a suffix.
+    if (normCurrent && normCurrent.endsWith(c)) return;
+
+    transcriptRef.current = current ? `${current} ${c}` : c;
+    setFinalText(transcriptRef.current);
+    onTranscript?.(c);
+  }
 
   React.useEffect(() => {
     const ok =
@@ -59,7 +84,9 @@ export function VoiceInput({ onTranscript }: Props) {
     } catch {}
     wsRef.current = null;
 
-    const transcript = `${finalText}${live ? (finalText ? " " : "") + live : ""}`.trim();
+    const transcript = normalizeChunk(
+      `${transcriptRef.current}${live ? (transcriptRef.current ? " " : "") + live : ""}`,
+    );
     setLive("");
 
     if (!transcript) return;
@@ -84,6 +111,8 @@ export function VoiceInput({ onTranscript }: Props) {
       setError(msg);
     } finally {
       setFinalText("");
+      transcriptRef.current = "";
+      lastFinalChunkRef.current = "";
     }
   }
 
@@ -129,6 +158,8 @@ export function VoiceInput({ onTranscript }: Props) {
         setListening(true);
         setLive("");
         setFinalText("");
+        transcriptRef.current = "";
+        lastFinalChunkRef.current = "";
         const mime =
           MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
             ? "audio/webm;codecs=opus"
@@ -154,11 +185,11 @@ export function VoiceInput({ onTranscript }: Props) {
           // Deepgram sends interim and final results.
           const isFinal = Boolean(msg?.is_final);
           if (isFinal) {
-            setFinalText((prev) => (prev ? `${prev} ${text}` : text));
+            appendFinalChunk(text);
             setLive("");
-            onTranscript?.(text);
           } else {
-            setLive(text);
+            // Interim results can repeat; only display the latest interim.
+            setLive(normalizeChunk(text));
           }
         } catch {
           // ignore
