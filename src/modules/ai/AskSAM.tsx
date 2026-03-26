@@ -16,7 +16,6 @@ export function AskSAM() {
   }, [tasks]);
 
   const [suggestions, setSuggestions] = React.useState<string[] | null>(null);
-  const [usingFallback, setUsingFallback] = React.useState(false);
 
   React.useEffect(() => {
     const input = buildSamInput(tasks, events);
@@ -25,10 +24,8 @@ export function AskSAM() {
         try {
           const s = await fetchSamSuggestions(input);
           setSuggestions(s);
-          setUsingFallback(false);
         } catch {
           setSuggestions(fallback);
-          setUsingFallback(true);
         }
       })();
     }, 700);
@@ -37,12 +34,6 @@ export function AskSAM() {
 
   return (
     <div className="mt-2 space-y-2">
-      {usingFallback ? (
-        <div className="text-xs text-muted-foreground">
-          SAM is running in fallback mode.
-        </div>
-      ) : null}
-
       {suggestions && suggestions.length > 0 ? (
         suggestions.map((s, idx) => (
           <div
