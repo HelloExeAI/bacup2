@@ -9,12 +9,13 @@ import { useEventStore } from "@/store/eventStore";
 
 type Props = {
   onTranscript?: (text: string) => void;
+  compact?: boolean;
 };
 
 const DG_URL =
   "wss://api.deepgram.com/v1/listen?model=nova-2&punctuate=true&smart_format=true&interim_results=true";
 
-export function VoiceInput({ onTranscript }: Props) {
+export function VoiceInput({ onTranscript, compact }: Props) {
   const [supported, setSupported] = React.useState(true);
   const [listening, setListening] = React.useState(false);
   const [live, setLive] = React.useState("");
@@ -217,6 +218,30 @@ export function VoiceInput({ onTranscript }: Props) {
     return (
       <div className="text-xs text-muted-foreground">
         Voice input isn’t supported in this browser.
+      </div>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => void (listening ? stop() : start())}
+          aria-label={listening ? "Stop mic" : "Start mic"}
+        >
+          {listening ? "Mic on" : "Mic"}
+        </Button>
+        <span
+          className={[
+            "h-2 w-2 rounded-full",
+            listening ? "bg-foreground" : "bg-border",
+          ].join(" ")}
+          aria-hidden="true"
+        />
+        {error ? <div className="text-xs text-muted-foreground">{error}</div> : null}
       </div>
     );
   }

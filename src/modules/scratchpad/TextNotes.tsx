@@ -6,6 +6,7 @@ import { parseTasks } from "@/modules/scratchpad/parser";
 import { useTaskStore } from "@/store/taskStore";
 import { VoiceInput } from "@/modules/scratchpad/VoiceInput";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
 
 function useDebouncedCallback<T extends (...args: any[]) => void>(cb: T, delayMs: number) {
   const cbRef = React.useRef(cb);
@@ -162,56 +163,55 @@ export function TextNotes() {
   }, [loaded, user]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Scratchpad</h1>
-        <div className="flex items-center gap-3">
-          {status ? (
-            <div className="text-sm text-muted-foreground">{status}</div>
-          ) : saving ? (
-            <div className="text-sm text-muted-foreground">Saving…</div>
-          ) : (
-            <div className="text-sm text-muted-foreground">Enter to save</div>
-          )}
+    <div className="rounded-xl border border-border bg-background shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="text-sm font-semibold">Scratchpad &amp; Notes</div>
+
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" type="button" disabled>
+            Convert to Task
+          </Button>
+          <VoiceInput
+            compact
+            onTranscript={(text) => {
+              const next = contentRef.current
+                ? `${contentRef.current}\n${text}`
+                : text;
+              setContent(next);
+              contentRef.current = next;
+            }}
+          />
+          <div className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
+            {status ? status : saving ? "Saving…" : "Saved"}
+          </div>
         </div>
       </div>
 
-      <VoiceInput
-        onTranscript={(text) => {
-          const next = contentRef.current
-            ? `${contentRef.current}\n${text}`
-            : text;
-          setContent(next);
-          contentRef.current = next;
-        }}
-      />
-
-      <textarea
-        className={[
-          "min-h-[220px] w-full rounded-lg border border-border bg-background p-4 text-sm text-foreground",
-          "placeholder:text-muted-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
-        ].join(" ")}
-        placeholder="Type a note, then press Enter to save. Use Shift+Enter for a new line."
-        value={content}
-        onChange={(e) => {
-          const next = e.target.value;
-          setContent(next);
-          contentRef.current = next;
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void save({ reason: "autosave" });
-          }
-        }}
-      />
-
-      <div className="text-xs text-muted-foreground">
-        Press <span className="font-mono">Enter</span> to save. Use{" "}
-        <span className="font-mono">Shift+Enter</span> for new lines. Tasks detected by keywords or
-        lines starting with <span className="font-mono">-</span> /{" "}
-        <span className="font-mono">[ ]</span>.
+      <div className="p-4">
+        <textarea
+          className={[
+            "min-h-[240px] w-full resize-none rounded-lg border border-border bg-background p-4 text-sm text-foreground",
+            "placeholder:text-muted-foreground",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
+          ].join(" ")}
+          placeholder="Type… Press Enter to save. Shift+Enter for a new line."
+          value={content}
+          onChange={(e) => {
+            const next = e.target.value;
+            setContent(next);
+            contentRef.current = next;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void save({ reason: "autosave" });
+            }
+          }}
+        />
+        <div className="mt-2 text-xs text-muted-foreground">
+          Tasks detected by keywords or lines starting with{" "}
+          <span className="font-mono">-</span> / <span className="font-mono">[ ]</span>.
+        </div>
       </div>
     </div>
   );
