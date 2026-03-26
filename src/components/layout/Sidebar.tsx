@@ -32,12 +32,6 @@ function NavItem({ href, label }: { href: string; label: string }) {
 export function Sidebar() {
   return (
     <aside className="hidden w-72 shrink-0 border-r border-border bg-background md:block">
-      <div className="flex h-14 items-center gap-2 px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-semibold">
-          Bc
-        </div>
-        <div className="text-sm font-semibold">Bacup</div>
-      </div>
       <div className="p-3">
         <nav className="space-y-1 px-1">
           {navItems.map((i) => (
