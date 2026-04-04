@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { performAppSignOut } from "@/lib/auth/clientSignOut";
 import { useUserStore } from "@/store/userStore";
 
 export function Navbar() {
+  const router = useRouter();
   const profile = useUserStore((s) => s.profile);
 
   return (
@@ -23,10 +25,7 @@ export function Navbar() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={async () => {
-              const supabase = createSupabaseBrowserClient();
-              await supabase.auth.signOut();
-            }}
+            onClick={() => void performAppSignOut(router)}
             type="button"
           >
             Sign out

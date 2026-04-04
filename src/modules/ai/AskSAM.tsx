@@ -33,18 +33,18 @@ export function AskSAM() {
   }, [events, fallback, tasks]);
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-2 space-y-1.5">
       {suggestions && suggestions.length > 0 ? (
         suggestions.map((s, idx) => (
           <div
             key={`${idx}-${s}`}
-            className="rounded-md border border-border bg-muted p-2"
+            className="rounded-md bg-muted/60 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.08)]"
           >
-            <div className="text-sm text-foreground">{s}</div>
+            <div className="text-xs text-foreground">{s}</div>
           </div>
         ))
       ) : (
-        <div className="text-sm text-muted-foreground">Thinking…</div>
+        <div className="text-xs text-muted-foreground">Thinking…</div>
       )}
     </div>
   );

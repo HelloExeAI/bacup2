@@ -1,21 +1,43 @@
 "use client";
 
 import * as React from "react";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { useTaskStore } from "@/store/taskStore";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchMyEvents } from "@/lib/supabase/queries";
 import { useEventStore } from "@/store/eventStore";
+import type { Task } from "@/store/taskStore";
 
 type Props = {
   onTranscript?: (text: string) => void;
+  /** Called with the full transcript so far (for live editor updates). */
+  onTranscriptChange?: (fullText: string) => void;
+  /** When `saveTranscriptToTasks=false`, fires after a final `onTranscriptChange` with the same text — use for side effects, not appending into the same field. */
+  onStop?: (finalText: string) => void;
   compact?: boolean;
+  /** When `compact=true`, show a small label next to the mic button. */
+  showCompactListeningLabel?: boolean;
+  /** When false, don’t save voice notes/tasks/events. */
+  saveTranscriptToTasks?: boolean;
+  onListeningChange?: (listening: boolean) => void;
+  /** Report wall-clock session length to `/api/deepgram/usage` for plan metering. */
+  reportVoiceUsage?: boolean;
 };
 
 const DG_URL =
-  "wss://api.deepgram.com/v1/listen?model=nova-2&punctuate=true&smart_format=true&interim_results=true";
+  "wss://api.deepgram.com/v1/listen?model=nova-3&punctuate=true&smart_format=true&interim_results=true";
 
-export function VoiceInput({ onTranscript, compact }: Props) {
+export function VoiceInput({
+  onTranscript,
+  onTranscriptChange,
+  onStop,
+  compact,
+  showCompactListeningLabel,
+  saveTranscriptToTasks = true,
+  onListeningChange,
+  reportVoiceUsage = true,
+}: Props) {
   const [supported, setSupported] = React.useState(true);
   const [listening, setListening] = React.useState(false);
   const [live, setLive] = React.useState("");
@@ -30,6 +52,7 @@ export function VoiceInput({ onTranscript, compact }: Props) {
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const transcriptRef = React.useRef<string>("");
   const lastFinalChunkRef = React.useRef<string>("");
+  const recordingStartedAtRef = React.useRef<number | null>(null);
 
   function normalizeChunk(s: string) {
     return s.trim().replace(/\s+/g, " ");
@@ -51,6 +74,7 @@ export function VoiceInput({ onTranscript, compact }: Props) {
 
     transcriptRef.current = current ? `${current} ${c}` : c;
     setFinalText(transcriptRef.current);
+    onTranscriptChange?.(transcriptRef.current);
     onTranscript?.(c);
   }
 
@@ -64,7 +88,11 @@ export function VoiceInput({ onTranscript, compact }: Props) {
   }, []);
 
   async function stop() {
+    const startedAt = recordingStartedAtRef.current;
+    recordingStartedAtRef.current = null;
+
     setListening(false);
+    onListeningChange?.(false);
     recorderRef.current?.stop();
     recorderRef.current = null;
 
@@ -85,12 +113,33 @@ export function VoiceInput({ onTranscript, compact }: Props) {
     } catch {}
     wsRef.current = null;
 
+    const elapsedSec =
+      startedAt != null
+        ? Math.min(6 * 3600, Math.max(0, Math.round((Date.now() - startedAt) / 1000)))
+        : 0;
+    if (reportVoiceUsage && elapsedSec > 0) {
+      void fetch("/api/deepgram/usage", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ seconds: elapsedSec }),
+      }).catch(() => {});
+    }
+
     const transcript = normalizeChunk(
       `${transcriptRef.current}${live ? (transcriptRef.current ? " " : "") + live : ""}`,
     );
     setLive("");
 
     if (!transcript) return;
+
+    if (!saveTranscriptToTasks) {
+      onTranscriptChange?.(transcript);
+      onStop?.(transcript);
+      setFinalText("");
+      transcriptRef.current = "";
+      lastFinalChunkRef.current = "";
+      return;
+    }
 
     try {
       const res = await fetch("/api/voice/save", {
@@ -101,7 +150,11 @@ export function VoiceInput({ onTranscript, compact }: Props) {
       const j = await res.json().catch(() => null);
       if (!res.ok) throw new Error(j?.error || `Save failed (${res.status})`);
 
-      addTasks((j?.tasks ?? []) as any);
+      const savedTasks = (j?.tasks ?? []) as Task[];
+      addTasks(savedTasks);
+      posthog.capture("voice_note_saved", {
+        tasks_created: savedTasks.length,
+      });
 
       // Refresh events (DB trigger creates them).
       const supabase = createSupabaseBrowserClient();
@@ -156,7 +209,10 @@ export function VoiceInput({ onTranscript, compact }: Props) {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        recordingStartedAtRef.current = Date.now();
+        posthog.capture("voice_note_started");
         setListening(true);
+        onListeningChange?.(true);
         setLive("");
         setFinalText("");
         transcriptRef.current = "";
@@ -190,7 +246,21 @@ export function VoiceInput({ onTranscript, compact }: Props) {
             setLive("");
           } else {
             // Interim results can repeat; only display the latest interim.
-            setLive(normalizeChunk(text));
+            const interim = normalizeChunk(text);
+            setLive(interim);
+            if (onTranscriptChange) {
+              const base = normalizeChunk(transcriptRef.current);
+              // Deepgram interim transcripts can repeat previously recognized text.
+              // Prefer using `interim` as-is when it already contains `base`.
+              let combined = base;
+              if (interim) {
+                if (!base) combined = interim;
+                else if (interim === base || interim.startsWith(base)) combined = interim;
+                else if (base.endsWith(interim)) combined = base;
+                else combined = `${base} ${interim}`;
+              }
+              if (combined) onTranscriptChange(combined);
+            }
           }
         } catch {
           // ignore
@@ -214,34 +284,74 @@ export function VoiceInput({ onTranscript, compact }: Props) {
     }
   }
 
-  if (!supported) {
+  if (compact) {
+    const disabled = !supported;
     return (
-      <div className="text-xs text-muted-foreground">
-        Voice input isn’t supported in this browser.
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="bacup-mic-btn"
+          data-listening={listening ? "true" : "false"}
+          onClick={() => void (listening ? stop() : start())}
+          disabled={disabled}
+          aria-label={listening ? "Stop mic" : "Start mic"}
+          title={
+            disabled
+              ? "Voice input isn’t supported in this browser."
+              : listening
+                ? "Stop mic"
+                : "Start mic"
+          }
+        >
+          <svg
+            className="bacup-mic-btn-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V7a3.5 3.5 0 1 0-7 0v4a3.5 3.5 0 0 0 3.5 3.5Z"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M6.5 11a5.5 5.5 0 0 0 11 0"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M12 16.5v3"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M9.5 19.5h5"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        {showCompactListeningLabel ? (
+          <span className="text-[11px] text-muted-foreground">{listening ? "Stop" : "Mic"}</span>
+        ) : null}
+        {error ? <div className="text-xs text-muted-foreground">{error}</div> : null}
       </div>
     );
   }
 
-  if (compact) {
+  if (!supported) {
     return (
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => void (listening ? stop() : start())}
-          aria-label={listening ? "Stop mic" : "Start mic"}
-        >
-          {listening ? "Mic on" : "Mic"}
-        </Button>
-        <span
-          className={[
-            "h-2 w-2 rounded-full",
-            listening ? "bg-foreground" : "bg-border",
-          ].join(" ")}
-          aria-hidden="true"
-        />
-        {error ? <div className="text-xs text-muted-foreground">{error}</div> : null}
+      <div className="text-xs text-muted-foreground">
+        Voice input isn’t supported in this browser.
       </div>
     );
   }

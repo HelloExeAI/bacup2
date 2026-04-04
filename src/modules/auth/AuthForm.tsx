@@ -2,16 +2,18 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { syncPosthogPerson } from "@/lib/posthog-person";
 import { useUserStore } from "@/store/userStore";
 import { fetchMyProfile } from "@/lib/supabase/queries";
 
 type Mode = "login" | "signup";
 
-export function AuthForm() {
+export function AuthForm({ oauthError }: { oauthError?: string }) {
   const router = useRouter();
   const setUser = useUserStore((s) => s.setUser);
   const setProfile = useUserStore((s) => s.setProfile);
@@ -20,8 +22,45 @@ export function AuthForm() {
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(oauthError ?? null);
   const [loading, setLoading] = React.useState(false);
+  const [oauthLoading, setOauthLoading] = React.useState<"google" | "azure" | null>(null);
+
+  React.useEffect(() => {
+    if (oauthError) setError(oauthError);
+  }, [oauthError]);
+
+  async function signInWithOAuth(provider: "google" | "azure") {
+    setError(null);
+    setOauthLoading(provider);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const origin = window.location.origin;
+      const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/scratchpad")}`;
+      const { data, error: oErr } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          ...(provider === "google"
+            ? { queryParams: { access_type: "offline", prompt: "consent" } }
+            : {}),
+        },
+      });
+      if (oErr) throw oErr;
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      throw new Error("OAuth did not return a redirect URL. Enable the provider in Supabase → Authentication.");
+    } catch (err) {
+      posthog.captureException(err);
+      const message =
+        err instanceof Error ? err.message : "Could not start sign-in. Check Supabase Auth provider settings.";
+      setError(message);
+    } finally {
+      setOauthLoading(null);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,7 +94,11 @@ export function AuthForm() {
 
         const profile = await fetchMyProfile(supabase);
         setProfile(profile);
-        router.replace("/dashboard");
+        if (user) {
+          syncPosthogPerson(user, profile);
+          posthog.capture("user_signed_up", { email: user.email });
+        }
+        router.replace("/scratchpad");
         return;
       }
 
@@ -69,8 +112,11 @@ export function AuthForm() {
       setUser(data.user);
       const profile = await fetchMyProfile(supabase);
       setProfile(profile);
-      router.replace("/dashboard");
+      syncPosthogPerson(data.user, profile);
+      posthog.capture("user_logged_in", { email: data.user.email });
+      router.replace("/scratchpad");
     } catch (err) {
+      posthog.captureException(err);
       if (err instanceof TypeError && /fetch/i.test(err.message)) {
         setError(
           "Network error: couldn't reach Supabase (Failed to fetch). Check NEXT_PUBLIC_SUPABASE_URL, your internet/DNS, and that the Supabase project is reachable from this network.",
@@ -148,13 +194,43 @@ export function AuthForm() {
                 </div>
               ) : null}
 
-              <Button className="w-full" disabled={loading} type="submit">
+              <Button className="w-full" disabled={loading || oauthLoading !== null} type="submit">
                 {loading
                   ? "Please wait…"
                   : mode === "login"
                     ? "Login"
                     : "Sign up"}
               </Button>
+
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <span className="bg-background px-2">Or continue with</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full border border-border"
+                  disabled={loading || oauthLoading !== null}
+                  onClick={() => void signInWithOAuth("google")}
+                >
+                  {oauthLoading === "google" ? "Redirecting…" : "Google"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full border border-border"
+                  disabled={loading || oauthLoading !== null}
+                  onClick={() => void signInWithOAuth("azure")}
+                >
+                  {oauthLoading === "azure" ? "Redirecting…" : "Microsoft"}
+                </Button>
+              </div>
 
               <div className="flex items-center justify-between pt-2 text-sm text-muted-foreground">
                 <button

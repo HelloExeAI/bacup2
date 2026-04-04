@@ -1,10 +1,26 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_PATHS = ["/login"];
+/** Allowed without a session (marketing, auth UI, OAuth return, logout). */
+const ALLOW_UNAUTHED = [
+  "/",
+  "/pricing",
+  "/signin",
+  "/signup",
+  "/login",
+  "/auth/callback",
+  "/auth/sign-out",
+];
 
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+/** If already signed in, redirect away from auth entry points. */
+const REDIRECT_WHEN_AUTHED = ["/login", "/signin", "/signup"];
+
+function allowWithoutSession(pathname: string) {
+  return ALLOW_UNAUTHED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function redirectAuthedAwayFrom(pathname: string) {
+  return REDIRECT_WHEN_AUTHED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export async function middleware(req: NextRequest) {
@@ -32,15 +48,14 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession();
 
   const { pathname } = req.nextUrl;
-  const isPublic = isPublicPath(pathname);
 
-  if (!session?.user && !isPublic) {
+  if (!session?.user && !allowWithoutSession(pathname)) {
     const url = req.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/signin";
     return NextResponse.redirect(url);
   }
 
-  if (session?.user && isPublic) {
+  if (session?.user && redirectAuthedAwayFrom(pathname)) {
     const url = req.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

@@ -5,6 +5,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Task } from "@/store/taskStore";
 import type { Event } from "@/store/eventStore";
 import { fetchMyEvents, fetchMyProfile, fetchMyTasks } from "@/lib/supabase/queries";
+import { syncPosthogPerson } from "@/lib/posthog-person";
+import type { Profile } from "@/store/userStore";
 import { useUserStore } from "@/store/userStore";
 import { useTaskStore } from "@/store/taskStore";
 import { useEventStore } from "@/store/eventStore";
@@ -13,10 +15,13 @@ export function AuthBootstrap({
   children,
   initialTasks,
   initialEvents,
+  initialProfile,
 }: {
   children: React.ReactNode;
   initialTasks?: Task[];
   initialEvents?: Event[];
+  /** Server-loaded profile so avatar and name hydrate immediately in the top bar. */
+  initialProfile?: Profile | null;
 }) {
   const setUser = useUserStore((s) => s.setUser);
   const setProfile = useUserStore((s) => s.setProfile);
@@ -25,6 +30,10 @@ export function AuthBootstrap({
   const clearTasks = useTaskStore((s) => s.clear);
   const setEvents = useEventStore((s) => s.setEvents);
   const clearEvents = useEventStore((s) => s.clear);
+
+  React.useLayoutEffect(() => {
+    if (initialProfile !== undefined) setProfile(initialProfile ?? null);
+  }, [initialProfile, setProfile]);
 
   React.useEffect(() => {
     if (initialTasks) setTasks(initialTasks);
@@ -47,6 +56,7 @@ export function AuthBootstrap({
         clear();
         clearTasks();
         clearEvents();
+        syncPosthogPerson(null, null);
         return;
       }
 
@@ -57,14 +67,17 @@ export function AuthBootstrap({
         setProfile(null);
         clearTasks();
         clearEvents();
+        syncPosthogPerson(null, null);
         return;
       }
 
       try {
         const profile = await fetchMyProfile(supabase);
         if (!cancelled) setProfile(profile);
+        if (!cancelled) syncPosthogPerson(user, profile);
       } catch {
         if (!cancelled) setProfile(null);
+        if (!cancelled) syncPosthogPerson(user, null);
       }
 
       try {
@@ -94,14 +107,17 @@ export function AuthBootstrap({
         setProfile(null);
         clearTasks();
         clearEvents();
+        syncPosthogPerson(null, null);
         return;
       }
 
       try {
         const profile = await fetchMyProfile(supabase);
         setProfile(profile);
+        syncPosthogPerson(user, profile);
       } catch {
         setProfile(null);
+        syncPosthogPerson(user, null);
       }
 
       try {

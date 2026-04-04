@@ -1,21 +1,41 @@
 "use client";
 
+import * as React from "react";
 import { TodayFocus } from "@/modules/tasks/TodayFocus";
-import { AskSAM } from "@/modules/ai/AskSAM";
+import { WatchListModal } from "@/modules/tasks/WatchList";
+import { AgendaCalendarPanel } from "@/modules/calendar/AgendaCalendarPanel";
 
 export function RightPanel() {
+  const [watchOpen, setWatchOpen] = React.useState(false);
+  const [watchDueDateFilter, setWatchDueDateFilter] = React.useState<string | undefined>(undefined);
+  const [watchListTitle, setWatchListTitle] = React.useState<string | undefined>(undefined);
+
   return (
-    <aside className="hidden w-80 shrink-0 border-l border-border bg-background xl:block">
-      <div className="space-y-4 p-4">
-        <section className="rounded-lg border border-border bg-background p-4 shadow-sm">
-          <div className="text-sm font-semibold">Today&apos;s Focus</div>
-          <TodayFocus />
+    <aside className="hidden w-80 min-w-0 shrink-0 bg-background/70 xl:block">
+      <div className="flex min-h-0 flex-col gap-3 p-3">
+        <section className="min-w-0 rounded-xl bacup-surface p-3">
+          <TodayFocus
+            onOpenTasks={(opts) => {
+              setWatchDueDateFilter(opts?.dueDateFilter);
+              setWatchListTitle(opts?.listTitle);
+              setWatchOpen(true);
+            }}
+          />
         </section>
-        <section className="rounded-lg border border-border bg-background p-4 shadow-sm">
-          <div className="text-sm font-semibold">SAM Suggestions</div>
-          <AskSAM />
-        </section>
+        <div className="min-h-0 min-w-0">
+          <AgendaCalendarPanel />
+        </div>
       </div>
+      <WatchListModal
+        open={watchOpen}
+        onClose={() => {
+          setWatchOpen(false);
+          setWatchDueDateFilter(undefined);
+          setWatchListTitle(undefined);
+        }}
+        dueDateFilter={watchDueDateFilter}
+        listTitle={watchListTitle}
+      />
     </aside>
   );
 }

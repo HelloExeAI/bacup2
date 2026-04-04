@@ -1,15 +1,27 @@
 @import "tailwindcss";
 
+/* App-controlled theme only: `dark:` utilities follow `html.dark`, not OS settings. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Lock rendering to our tokens so macOS/Chrome “system dark” does not apply light text
+ * on warm light backgrounds. `only` tells the UA not to blend the other scheme.
+ * Fallback: browsers that don’t support `only` ignore the value and use `light`/`dark`.
+ */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --border: 214.3 31.8% 91.4%;
-  --ring: 222.2 84% 4.9%;
+  color-scheme: light;
+  color-scheme: light only;
+  --background: 40 17% 95%;
+  --foreground: 24 12% 18%;
+  --muted: 36 20% 92%;
+  --muted-foreground: 26 10% 42%;
+  --border: 34 15% 84%;
+  --ring: 36 26% 52%;
 }
 
 .dark {
+  color-scheme: dark;
+  color-scheme: dark only;
   --background: 222.2 84% 4.9%;
   --foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%;
@@ -25,11 +37,334 @@
   --color-muted-foreground: hsl(var(--muted-foreground));
   --color-border: hsl(var(--border));
   --color-ring: hsl(var(--ring));
-  --font-sans: var(--font-geist-sans);
+  /* Sans-serif everywhere: primary face + system sans fallbacks */
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   --font-mono: var(--font-geist-mono);
+}
+
+/* DSEG7 (SIL OFL) — 7-segment LCD numerals; see public/fonts/DSEG-LICENSE.txt */
+@font-face {
+  font-family: "DSEG7 Classic";
+  src: url("/fonts/DSEG7Classic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+.bacup-lcd-dseg {
+  font-family: "DSEG7 Classic", var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 700;
+}
+
+html {
+  font-family: var(--font-sans);
 }
 
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  letter-spacing: 0.01em;
+}
+
+/* Ensure no subtree reverts to serif / monospace unless explicitly styled */
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+/* Soft "wabi-sabi" surfaces used across panels/modules. */
+.bacup-surface {
+  background: hsl(var(--muted) / 0.72);
+  box-shadow:
+    0 1px 0 rgba(70, 54, 39, 0.03),
+    0 10px 24px rgba(61, 45, 33, 0.08);
+}
+
+.dark .bacup-surface {
+  background: hsl(var(--muted) / 0.5);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03),
+    0 12px 24px rgba(0, 0, 0, 0.32);
+}
+
+@layer utilities {
+  @keyframes bacup-caret-blink {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .bacup-caret {
+    display: inline-block;
+    width: 1px;
+    height: 1em;
+    background: hsl(var(--foreground));
+    opacity: 0.85;
+    transform: translateY(1px);
+    animation: bacup-caret-blink 1s step-end infinite;
+  }
+
+  @keyframes bacup-live-glow {
+    0%,
+    100% {
+      opacity: 0.45;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.06);
+    }
+  }
+
+  .bacup-live-glow {
+    animation: none;
+  }
+
+  @keyframes bacup-live-dot-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+      filter: brightness(0.85);
+    }
+    50% {
+      opacity: 1;
+      filter: brightness(1.25);
+    }
+  }
+
+  .bacup-live-dot-pulse {
+    animation: none;
+  }
+
+  /* Notification bell: side-to-side ring (pivot near top loop). */
+  @keyframes bacup-bell-ring {
+    0% {
+      transform: rotate(-16deg);
+    }
+    100% {
+      transform: rotate(16deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .bacup-bell-ring-anim {
+      animation: bacup-bell-ring 0.42s ease-in-out infinite alternate;
+      transform-origin: 50% 18%;
+    }
+  }
+
+  /* Top bar timer: gentle tick motion while countdown is active. */
+  @keyframes bacup-timer-live {
+    0% {
+      transform: rotate(-11deg);
+    }
+    100% {
+      transform: rotate(11deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .bacup-timer-icon-live {
+      display: inline-flex;
+      animation: bacup-timer-live 0.85s ease-in-out infinite alternate;
+      transform-origin: 50% 54%;
+      will-change: transform;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bacup-timer-icon-live {
+      animation: none;
+    }
+  }
+
+  @keyframes bacup-mic-sweep {
+    0% {
+      transform: translateX(-140%) rotate(20deg);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.7;
+    }
+    55% {
+      opacity: 0.65;
+    }
+    100% {
+      transform: translateX(140%) rotate(20deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes bacup-mic-glow {
+    0%,
+    100% {
+      opacity: 0.45;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.75;
+      transform: scale(1.04);
+    }
+  }
+
+  .bacup-mic-btn {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    height: 36px;
+    width: 36px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+    transition: transform 120ms ease, box-shadow 160ms ease;
+  }
+
+  .dark .bacup-mic-btn {
+    background: hsl(var(--background));
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+  }
+
+  .bacup-mic-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: none;
+    filter: none;
+    transform: none;
+    animation: none;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .bacup-mic-btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: none;
+    opacity: 0;
+    animation: none;
+    pointer-events: none;
+  }
+
+  .bacup-mic-btn:active {
+    transform: translateY(1px) scale(0.99);
+  }
+
+  .bacup-mic-btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .bacup-mic-btn-icon {
+    position: relative;
+    z-index: 1;
+    height: 18px;
+    width: 18px;
+    color: hsl(var(--foreground));
+    opacity: 0.9;
+  }
+
+  .bacup-mic-btn[data-listening="true"] {
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12);
+  }
+
+  /** Topbar settings: 3D-tilted gear with slow rotation */
+  @keyframes bacup-settings-gear-3d {
+    from {
+      transform: rotateX(14deg) rotateY(-12deg) rotateZ(0deg);
+    }
+    to {
+      transform: rotateX(14deg) rotateY(-12deg) rotateZ(360deg);
+    }
+  }
+
+  .bacup-settings-gear-scene {
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    perspective: 88px;
+    perspective-origin: 50% 50%;
+  }
+
+  .bacup-settings-gear-3d {
+    transform-style: preserve-3d;
+    transform-origin: 50% 50%;
+    animation: bacup-settings-gear-3d 14s linear infinite;
+    will-change: transform;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bacup-settings-gear-3d {
+      animation: none;
+      transform: rotateX(11deg) rotateY(-9deg);
+    }
+  }
+
+  /** Theme toggle (topbar): slow sun rotation + gentle moon drift */
+  @keyframes bacup-theme-sun-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes bacup-theme-moon-drift {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-5deg);
+    }
+    50% {
+      transform: translateY(-2px) rotate(5deg);
+    }
+  }
+
+  .bacup-theme-toggle-sun {
+    display: inline-flex;
+    animation: bacup-theme-sun-spin 32s linear infinite;
+    will-change: transform;
+  }
+
+  .bacup-theme-toggle-moon {
+    display: inline-flex;
+    animation: bacup-theme-moon-drift 5s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bacup-theme-toggle-sun,
+    .bacup-theme-toggle-moon {
+      animation: none;
+    }
+  }
+}
+
+/* Email reader print: prefer readable message body */
+@media print {
+  .email-body-html {
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+  }
+  .email-body-html img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { parseTasks } from "@/modules/scratchpad/parser";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const BodySchema = z.object({
   transcript: z.string().min(1).max(200_000),
@@ -65,6 +66,12 @@ export async function POST(req: Request) {
   }
 
   if (drafts.length === 0) {
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: user.id,
+      event: "voice_note_created",
+      properties: { tasks_extracted: 0, transcript_length: transcript.length },
+    });
     return NextResponse.json({ note_id: note.id, tasks: [] });
   }
 
@@ -75,11 +82,12 @@ export async function POST(req: Request) {
         user_id: user.id,
         title: t.title,
         description: t.description,
-        due_date: t.due_date,
-        due_time: t.due_time,
+        due_date: t.due_date ?? new Date().toISOString().slice(0, 10),
+        due_time: t.due_time ?? "09:00",
         type: t.type,
-        assigned_to: t.assigned_to,
+        assigned_to: t.assigned_to || "self",
         status: "pending",
+        completed_at: null,
         source: "scratchpad",
       })),
     )
@@ -92,6 +100,17 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ note_id: note.id, tasks: tasks ?? [] });
+  const savedTasks = tasks ?? [];
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: user.id,
+    event: "voice_note_created",
+    properties: {
+      tasks_extracted: savedTasks.length,
+      transcript_length: transcript.length,
+    },
+  });
+
+  return NextResponse.json({ note_id: note.id, tasks: savedTasks });
 }
 

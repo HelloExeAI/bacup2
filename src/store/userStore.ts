@@ -8,6 +8,15 @@ export type Profile = {
   name: string | null;
   role: ProfileRole;
   created_at: string;
+  phone?: string | null;
+  phone_country_code?: string | null;
+  timezone?: string | null;
+  location?: string | null;
+  avatar_url?: string | null;
+  first_name?: string | null;
+  middle_name?: string | null;
+  last_name?: string | null;
+  display_name?: string | null;
 };
 
 type UserState = {
@@ -15,6 +24,7 @@ type UserState = {
   profile: Profile | null;
   setUser: (user: User | null) => void;
   setProfile: (profile: Profile | null) => void;
+  patchProfile: (patch: Partial<Profile>) => void;
   clear: () => void;
 };
 
@@ -23,6 +33,8 @@ export const useUserStore = create<UserState>((set) => ({
   profile: null,
   setUser: (user) => set({ user }),
   setProfile: (profile) => set({ profile }),
+  patchProfile: (patch) =>
+    set((s) => (s.profile ? { profile: { ...s.profile, ...patch } } : s)),
   clear: () => set({ user: null, profile: null }),
 }));
 

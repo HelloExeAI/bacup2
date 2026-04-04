@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { assertDeepgramQuotaAvailable } from "@/lib/billing/aiQuota";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 export async function POST() {
   // Ensure only authenticated app users can mint Deepgram tokens.
@@ -10,6 +13,18 @@ export async function POST() {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const voice = await assertDeepgramQuotaAvailable(supabase, user.id, 15);
+  if (!voice.ok) {
+    return NextResponse.json(
+      {
+        error: "Voice transcription quota exceeded for this month. Add voice minutes in Plans or upgrade.",
+        code: "quota_exceeded",
+        kind: "deepgram",
+      },
+      { status: 402 },
+    );
+  }
 
   const apiKey = process.env.DEEPGRAM_API_KEY;
   if (!apiKey) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { defaultDueTimeQuarterHour } from "@/lib/datetime/quarterHour";
 import { parseTasks } from "@/modules/scratchpad/parser";
 
 const BodySchema = z.object({
@@ -56,11 +57,12 @@ export async function POST(req: Request) {
         user_id: user.id,
         title: t.title,
         description: t.description,
-        due_date: t.due_date,
-        due_time: t.due_time,
+        due_date: t.due_date ?? new Date().toISOString().slice(0, 10),
+        due_time: t.due_time ?? defaultDueTimeQuarterHour(),
         type: t.type,
-        assigned_to: t.assigned_to,
+        assigned_to: t.assigned_to || "self",
         status: "pending",
+        completed_at: null,
         source: "scratchpad",
       })),
     )

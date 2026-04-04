@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { assertOpenAIQuotaAvailable, recordOpenAITokenUsage } from "@/lib/billing/aiQuota";
+import { extractOpenAIUsageFromChatCompletion } from "@/lib/billing/openaiUsageFromResponse";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const SamInputSchema = z.object({
@@ -85,6 +87,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ suggestions: existing.suggestions, cached: true });
   }
 
+  const quota = await assertOpenAIQuotaAvailable(supabase, user.id, 600);
+  if (!quota.ok) {
+    return NextResponse.json(
+      { error: "AI quota exceeded for this month.", code: "quota_exceeded", kind: "openai" },
+      { status: 402 },
+    );
+  }
+
   const system =
     "You are SAM, an elite executive assistant for high-performing professionals.\n\nYour job is to:\n- Identify the most important action right now\n- Prevent missed commitments\n- Reduce overwhelm\n- Push the user toward high-impact work\n\nRules:\n- Be direct and decisive\n- No generic advice\n- Prioritize impact over urgency when needed\n- Max 4 suggestions\n- Each suggestion must be actionable\n\nTone:\n- Clear\n- Confident\n- Slightly authoritative\n\nReturn ONLY a JSON array of 1-4 short actionable suggestions (strings). No extra text.";
 
@@ -113,6 +123,11 @@ export async function POST(req: Request) {
       { error: body?.error?.message || "OpenAI request failed" },
       { status: 500 },
     );
+  }
+
+  const u = extractOpenAIUsageFromChatCompletion(body);
+  if (u && u.totalTokens > 0) {
+    await recordOpenAITokenUsage(supabase, user.id, u.totalTokens);
   }
 
   const text: string =

@@ -7,36 +7,53 @@ export type ParsedTask = {
   due_time: string | null; // HH:MM (24h)
 };
 
-const KEYWORDS = [
-  "call",
-  "send",
+const FOLLOWUP_HINTS = [
   "follow up",
-  "fix",
-  "complete",
-  "schedule",
-  "meeting",
+  "follow-up",
+  "follow up with",
+  "check with",
+  "check in with",
+  "ask",
+  "tell",
 ] as const;
 
-const FOLLOWUP_HINTS = ["ask", "tell", "follow up with", "check with"] as const;
+function normalizeLine(raw: string) {
+  let s = raw.trim();
+  // Strip scratchpad-export bullets like "- item" or "* item".
+  s = s.replace(/^[\-\*\u2022]\s+/, "");
+  return s.trim();
+}
 
 function isTaskLine(raw: string) {
-  const s = raw.trim();
+  const s = normalizeLine(raw);
   if (!s) return false;
-  if (s.startsWith("-")) return true;
-  if (s.startsWith("[ ]")) return true;
+
+  // Explicit checkbox is always actionable.
+  if (s.startsWith("[ ]") || s.toLowerCase().startsWith("todo:")) return true;
 
   const lower = s.toLowerCase();
-  return (
-    KEYWORDS.some((k) => lower.includes(k)) ||
-    lower.includes("remind me") ||
-    FOLLOWUP_HINTS.some((k) => lower.includes(k))
-  );
+  if (lower.includes("remind me")) return true;
+
+  // Strong action verbs (imperative) at start.
+  if (
+    /^(call|email|message|text|send|follow up|follow-up|check|fix|review|submit|pay|book|schedule|prepare|draft|share|update)\b/i.test(
+      s,
+    )
+  ) {
+    return true;
+  }
+
+  // Follow-up hints, but only when the sentence reads like an action.
+  if (FOLLOWUP_HINTS.some((k) => lower.startsWith(k) || lower.includes(` ${k} `))) {
+    if (/(with|to)\s+[a-z]/i.test(s) || /^(ask|tell)\s+[a-z]/i.test(s)) return true;
+  }
+
+  return false;
 }
 
 function cleanTitle(raw: string) {
-  let s = raw.trim();
+  let s = normalizeLine(raw);
   if (s.startsWith("[ ]")) s = s.slice(3).trim();
-  if (s.startsWith("-")) s = s.slice(1).trim();
   return s.replace(/\s+/g, " ").slice(0, 120);
 }
 

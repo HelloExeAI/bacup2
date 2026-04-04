@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
@@ -13,9 +14,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+function metadataBaseUrl(): URL {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ?? "";
+  if (raw.startsWith("http")) {
+    try {
+      return new URL(raw);
+    } catch {
+      /* ignore */
+    }
+  }
+  return new URL("https://www.thebacup.com");
+}
+
 export const metadata: Metadata = {
-  title: "Bacup-2",
-  description: "Bacup-2",
+  metadataBase: metadataBaseUrl(),
+  title: {
+    default: "Bacup",
+    template: "%s · Bacup",
+  },
+  description: "Personal operating system for life and work — tasks, calendar, scratchpad, and Ask Bacup.",
+  applicationName: "Bacup",
+};
+
+/** Default light; boot script + ThemeProvider align with `bacup-theme` and update meta. */
+export const viewport: Viewport = {
+  colorScheme: "light",
 };
 
 export default function RootLayout({
@@ -26,9 +49,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full scroll-smooth font-sans antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body
+        className="min-h-full flex flex-col bg-background font-sans text-foreground"
+        suppressHydrationWarning
+      >
+        <Script id="bacup-theme-boot" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem("bacup-theme");var d=t==="dark";document.documentElement.classList.toggle("dark",d);var m=document.querySelector('meta[name="color-scheme"]');if(m)m.setAttribute("content",d?"dark":"light");}catch(e){}})();`}
+        </Script>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

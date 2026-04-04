@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AuthBootstrap } from "@/modules/auth/AuthBootstrap";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { fetchMyEvents, fetchMyTasks } from "@/lib/supabase/queries";
+import { fetchMyEvents, fetchMyProfile, fetchMyTasks } from "@/lib/supabase/queries";
 
 export default async function ProtectedLayout({
   children,
@@ -14,15 +14,16 @@ export default async function ProtectedLayout({
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (!session?.user) redirect("/login");
+  if (!session?.user) redirect("/signin");
 
-  const [initialTasks, initialEvents] = await Promise.all([
+  const [initialTasks, initialEvents, initialProfile] = await Promise.all([
     fetchMyTasks(supabase),
     fetchMyEvents(supabase),
+    fetchMyProfile(supabase).catch(() => null),
   ]);
 
   return (
-    <AuthBootstrap initialTasks={initialTasks} initialEvents={initialEvents}>
+    <AuthBootstrap initialTasks={initialTasks} initialEvents={initialEvents} initialProfile={initialProfile}>
       <AppLayout>{children}</AppLayout>
     </AuthBootstrap>
   );

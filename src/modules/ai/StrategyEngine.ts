@@ -1,3 +1,4 @@
+import { isTaskOverdue, taskOverdueCalendarDays } from "@/lib/tasks/taskOverdue";
 import type { Task } from "@/store/taskStore";
 
 export class StrategyEngine {
@@ -41,8 +42,13 @@ export class StrategyEngine {
     const pending = tasks.filter((t) => t.status === "pending");
 
     const overdue = pending
-      .filter((t) => t.due_date && this.compareDate(t.due_date, today) < 0)
-      .sort((a, b) => this.compareDate(a.due_date, b.due_date));
+      .filter((t) => isTaskOverdue(t, now))
+      .sort((a, b) => {
+        const da = taskOverdueCalendarDays(a, now) ?? 0;
+        const db = taskOverdueCalendarDays(b, now) ?? 0;
+        if (db !== da) return db - da;
+        return this.compareDate(a.due_date, b.due_date);
+      });
 
     const dueToday = pending
       .filter((t) => t.due_date === today)
@@ -67,8 +73,15 @@ export class StrategyEngine {
     const suggestions: string[] = [];
 
     if (overdue.length > 0) {
+      const oldestDays = taskOverdueCalendarDays(overdue[0]!, now) ?? 0;
+      const aging =
+        oldestDays === 0
+          ? "oldest due today"
+          : oldestDays === 1
+            ? "oldest 1 day overdue"
+            : `oldest ${oldestDays} days overdue`;
       suggestions.push(
-        `You have ${overdue.length} overdue tasks. Start with ${overdue[0]!.title}`,
+        `You have ${overdue.length} overdue tasks (${aging}). Start with ${overdue[0]!.title}`,
       );
     }
 
