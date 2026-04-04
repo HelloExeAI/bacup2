@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { defaultMetadataBase } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,20 +15,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-function metadataBaseUrl(): URL {
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ?? "";
-  if (raw.startsWith("http")) {
-    try {
-      return new URL(raw);
-    } catch {
-      /* ignore */
-    }
-  }
-  return new URL("https://www.thebacup.com");
-}
-
 export const metadata: Metadata = {
-  metadataBase: metadataBaseUrl(),
+  metadataBase: defaultMetadataBase(),
   title: {
     default: "Bacup",
     template: "%s · Bacup",

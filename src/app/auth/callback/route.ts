@@ -7,8 +7,10 @@ import { getSupabaseEnv } from "@/lib/supabase/env";
 export const dynamic = "force-dynamic";
 
 /**
- * OAuth redirect target for Supabase Auth (Google / Azure).
- * Configure the same URL under Authentication → URL configuration → Redirect URLs.
+ * Supabase Auth OAuth return URL. Must be listed under
+ * Supabase Dashboard → Authentication → URL configuration → Redirect URLs
+ * as: {origin}/auth/callback (e.g. https://www.thebacup.com/auth/callback).
+ * Site URL there should match where users sign in (same scheme + host).
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);

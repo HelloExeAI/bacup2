@@ -24,6 +24,10 @@ export function microsoftStateSecret(): string | undefined {
 export function microsoftRedirectUriFromRequest(req: Request): string {
   const env = process.env.MICROSOFT_OAUTH_REDIRECT_URI?.trim();
   if (env) return env;
+  const base = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  if (base?.startsWith("http")) {
+    return `${base}/api/integrations/microsoft/callback`;
+  }
   const u = new URL(req.url);
   return `${u.origin}/api/integrations/microsoft/callback`;
 }

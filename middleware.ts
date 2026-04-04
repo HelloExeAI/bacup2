@@ -24,41 +24,66 @@ function redirectAuthedAwayFrom(pathname: string) {
 }
 
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
   const res = NextResponse.next();
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  /** Edge middleware must not throw — missing Vercel env vars cause MIDDLEWARE_INVOCATION_FAILED. */
+  if (!url || !anon) {
+    if (allowWithoutSession(pathname)) {
+      return NextResponse.next();
+    }
+    const signin = req.nextUrl.clone();
+    signin.pathname = "/signin";
+    return NextResponse.redirect(signin);
+  }
+
+  let session: { user: unknown } | null = null;
+  try {
+    const supabase = createServerClient(url, anon, {
       cookies: {
         getAll() {
           return req.cookies.getAll();
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            res.cookies.set(name, value, options);
+            try {
+              res.cookies.set(name, value, options);
+            } catch {
+              /* Edge can reject some cookie option shapes; session refresh still best-effort */
+            }
           });
         },
       },
-    },
-  );
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const { pathname } = req.nextUrl;
+    });
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn("[middleware] getSession:", error.message);
+    } else {
+      session = data.session;
+    }
+  } catch (e) {
+    console.error("[middleware] Supabase session failed:", e);
+    if (allowWithoutSession(pathname)) {
+      return NextResponse.next();
+    }
+    const signin = req.nextUrl.clone();
+    signin.pathname = "/signin";
+    return NextResponse.redirect(signin);
+  }
 
   if (!session?.user && !allowWithoutSession(pathname)) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/signin";
-    return NextResponse.redirect(url);
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = "/signin";
+    return NextResponse.redirect(redirectUrl);
   }
 
   if (session?.user && redirectAuthedAwayFrom(pathname)) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = "/dashboard";
+    return NextResponse.redirect(redirectUrl);
   }
 
   return res;

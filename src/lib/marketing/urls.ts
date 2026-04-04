@@ -1,6 +1,7 @@
 /**
- * Split deploy: marketing (e.g. bacup.com) vs app (e.g. app.bacup.com).
- * When `NEXT_PUBLIC_APP_ORIGIN` is set, CTAs point the browser at the app host for sign-in and post-login entry.
+ * Default production: https://www.thebacup.com (set NEXT_PUBLIC_APP_URL).
+ * Split deploy: optional marketing host vs app host — when `NEXT_PUBLIC_APP_ORIGIN` is set,
+ * CTAs point the browser at the app origin for sign-in and post-auth entry.
  */
 
 const stripSlash = (s: string) => s.replace(/\/$/, "");
