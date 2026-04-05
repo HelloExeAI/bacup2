@@ -59,7 +59,10 @@ export function normalizePlanId(raw: string | null | undefined): BillingPlanId {
   const s = (raw ?? "").trim().toLowerCase();
   if (s === "solo") return "solo";
   if (s === "starter" || s === "pro" || s === "business") return s;
-  return "free";
+  /** Legacy rows may still say `free` (pre–Solo OS migration). */
+  if (s === "free") return "free";
+  /** Empty or unknown → treat as Solo (0 included OpenAI), not legacy free (80k). */
+  return "solo";
 }
 
 export function planQuotas(plan: BillingPlanId): PlanQuotas {
