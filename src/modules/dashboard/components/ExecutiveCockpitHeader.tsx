@@ -111,7 +111,7 @@ export function ExecutiveCockpitHeader({
             type="button"
             onClick={onClose}
             className="flex h-6 w-6 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground hover:bg-foreground/5"
-            aria-label="Close dashboard"
+            aria-label="Go to scratchpad"
           >
             <IconClose />
           </button>

@@ -270,8 +270,9 @@ export default function DashboardPage() {
         showBack={!!detailTask}
         onBack={() => setDetailTask(null)}
         onClose={() => {
-          if (window.history.length > 1) router.back();
-          else router.push("/scratchpad");
+          // Never use router.back() here: after OAuth/login the history stack often points
+          // outside the app (Google, marketing site), so "back" exits the tab or PWA.
+          router.push("/scratchpad");
         }}
       />
 
