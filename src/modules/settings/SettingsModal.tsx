@@ -1036,11 +1036,6 @@ export function SettingsModal({
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="truncate font-medium text-foreground">{a.account_email}</div>
-                            {a.scopes ? (
-                              <div className="mt-0.5 truncate text-[10px] text-muted-foreground" title={a.scopes}>
-                                Scopes granted
-                              </div>
-                            ) : null}
                           </div>
                           <button
                             type="button"
@@ -1106,10 +1101,6 @@ export function SettingsModal({
                       Connect with Microsoft
                     </a>
                   </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    Requires MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET in the server environment. Calendar read is merged
-                    into Timeline with Google.
-                  </p>
                 </div>
               </div>
             ) : tab === "team" ? (

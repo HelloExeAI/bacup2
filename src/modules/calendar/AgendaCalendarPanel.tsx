@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import type { TimelineItem, TimelineSource } from "@/lib/timeline/types";
-import { useSettingsModal } from "@/modules/settings/SettingsProvider";
 import type { Task, TaskType } from "@/store/taskStore";
 import { useTaskStore } from "@/store/taskStore";
 import { TaskQuickDetailModal } from "@/modules/tasks/TaskQuickDetailModal";
@@ -487,8 +486,6 @@ function TimelineCalendarEventModal({
 }
 
 export function AgendaCalendarPanel() {
-  const { openSettingsToTab } = useSettingsModal();
-
   const tasks = useTaskStore((s) => s.tasks);
   const addTasks = useTaskStore((s) => s.addTasks);
   const removeByIds = useTaskStore((s) => s.removeByIds);
@@ -497,9 +494,6 @@ export function AgendaCalendarPanel() {
   const [loading, setLoading] = React.useState(!initialPeek.fresh);
   const [error, setError] = React.useState<string | null>(null);
   const [items, setItems] = React.useState<TimelineItem[]>(initialPeek.data?.items ?? []);
-  const [connected, setConnected] = React.useState<{ google: boolean; outlook: boolean }>(
-    initialPeek.data?.connected ?? { google: false, outlook: false },
-  );
 
   const [modalItem, setModalItem] = React.useState<TimelineItem | null>(null);
   /** When set, we show the task popup for the created/selected local task. */
@@ -513,7 +507,6 @@ export function AgendaCalendarPanel() {
     const peek = force ? { fresh: false, data: null } : peekTodayTimelineCache();
     if (!force && peek.fresh && peek.data) {
       setItems(peek.data.items);
-      setConnected(peek.data.connected);
       setLoading(false);
       setError(null);
       return;
@@ -524,11 +517,9 @@ export function AgendaCalendarPanel() {
     try {
       const { data } = await fetchTodayTimelineCached({ force });
       setItems(data.items ?? []);
-      setConnected(data.connected ?? { google: false, outlook: false });
     } catch {
       setError("Could not load timeline.");
       setItems([]);
-      setConnected({ google: false, outlook: false });
     } finally {
       setLoading(false);
     }
@@ -554,8 +545,6 @@ export function AgendaCalendarPanel() {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [load]);
-
-  const calendarDisconnected = !connected.google && !connected.outlook;
 
   const isExternalItemDone = React.useCallback(
     (itemKey: string) => {
@@ -704,20 +693,11 @@ export function AgendaCalendarPanel() {
     <section className="flex max-h-[min(58vh,520px)] min-h-0 flex-col overflow-hidden rounded-xl bacup-surface p-3">
       <div className="shrink-0">
         <div className="text-xs font-semibold tracking-wide text-foreground">Timeline</div>
-        {calendarDisconnected ? (
-          <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
-            Connect{" "}
-            <button type="button" onClick={() => openSettingsToTab("integrations")} className={linkClass}>
-              Google or Microsoft
-            </button>{" "}
-            to merge calendar events (including birthdays from Google Contacts).
-          </p>
-        ) : null}
       </div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
         {loading ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
+          <p className="text-xs text-muted-foreground">Analysing…</p>
         ) : error ? (
           <p className="text-xs text-red-600 dark:text-red-400/90">{error}</p>
         ) : (

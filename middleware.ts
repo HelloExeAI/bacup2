@@ -1,22 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-/** Allowed without a session (marketing, auth UI, OAuth return, logout). */
-const ALLOW_UNAUTHED = [
-  "/",
-  "/pricing",
-  "/signin",
-  "/signup",
-  "/login",
-  "/auth/callback",
-  "/auth/sign-out",
-];
+import { allowPathWithoutSession } from "@/lib/auth/publicPaths";
 
 /** If already signed in, redirect away from auth entry points. */
 const REDIRECT_WHEN_AUTHED = ["/login", "/signin", "/signup"];
 
 function allowWithoutSession(pathname: string) {
-  return ALLOW_UNAUTHED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return allowPathWithoutSession(pathname);
 }
 
 function redirectAuthedAwayFrom(pathname: string) {

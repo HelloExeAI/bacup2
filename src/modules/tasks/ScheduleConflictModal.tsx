@@ -115,7 +115,7 @@ export function ScheduleConflictModal({
 
         <div className="mt-3 max-h-[min(60vh,420px)] space-y-3 overflow-y-auto">
           {timelineLoading ? (
-            <p className="text-xs text-muted-foreground">Loading calendar…</p>
+            <p className="text-xs text-muted-foreground">Analysing…</p>
           ) : conflicts.length === 0 ? (
             <p className="text-xs text-muted-foreground">No conflicts right now.</p>
           ) : (

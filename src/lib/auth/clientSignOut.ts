@@ -1,5 +1,6 @@
 "use client";
 
+import { getSignOutRedirectHref } from "@/lib/auth/signOutRedirect";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { syncPosthogPerson } from "@/lib/posthog-person";
 import { useEventStore } from "@/store/eventStore";
@@ -8,8 +9,10 @@ import { useUserStore } from "@/store/userStore";
 
 /**
  * Server clears httpOnly Supabase cookies; client clears in-memory session and local stores.
+ * Uses a full document navigation to sign-in so we never leave the user on /scratchpad
+ * (router.refresh() after push can revalidate the current route before navigation completes).
  */
-export async function performAppSignOut(router: { push: (href: string) => void; refresh: () => void }): Promise<void> {
+export async function performAppSignOut(_router?: { push: (href: string) => void; refresh: () => void }): Promise<void> {
   try {
     const res = await fetch("/auth/sign-out", {
       method: "POST",
@@ -34,6 +37,5 @@ export async function performAppSignOut(router: { push: (href: string) => void; 
   useEventStore.getState().clear();
   syncPosthogPerson(null, null);
 
-  router.push("/signin");
-  router.refresh();
+  window.location.assign(getSignOutRedirectHref());
 }

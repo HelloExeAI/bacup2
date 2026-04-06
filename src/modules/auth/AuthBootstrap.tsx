@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+
+import { allowPathWithoutSession } from "@/lib/auth/publicPaths";
+import { getSignOutRedirectHref } from "@/lib/auth/signOutRedirect";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Task } from "@/store/taskStore";
 import type { Event } from "@/store/eventStore";
@@ -68,6 +71,9 @@ export function AuthBootstrap({
         clearTasks();
         clearEvents();
         syncPosthogPerson(null, null);
+        if (typeof window !== "undefined" && !allowPathWithoutSession(window.location.pathname)) {
+          window.location.assign(getSignOutRedirectHref());
+        }
         return;
       }
 
@@ -99,7 +105,7 @@ export function AuthBootstrap({
 
     hydrate();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (evt, s) => {
       const user = s?.user ?? null;
       setUser(user);
 
@@ -108,6 +114,13 @@ export function AuthBootstrap({
         clearTasks();
         clearEvents();
         syncPosthogPerson(null, null);
+        if (
+          evt === "SIGNED_OUT" &&
+          typeof window !== "undefined" &&
+          !allowPathWithoutSession(window.location.pathname)
+        ) {
+          window.location.assign(getSignOutRedirectHref());
+        }
         return;
       }
 

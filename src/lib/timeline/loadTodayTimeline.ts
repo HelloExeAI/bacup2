@@ -32,55 +32,77 @@ export async function loadTodayTimeline(
   let googleConnected = false;
   let outlookConnected = false;
 
-  try {
-    const { accessToken } = await getValidGoogleAccessToken(supabase, userId, null);
+  const { data: googleAccountRows, error: googleListErr } = await supabase
+    .from("user_connected_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("provider", "google")
+    .order("created_at", { ascending: true });
+
+  if (!googleListErr && googleAccountRows?.length) {
     googleConnected = true;
-    const raw = await fetchGoogleTimelineEvents(accessToken, timeMin, timeMax, 80);
-    for (const ev of raw) {
-      if (eventLocalYmd(ev.start) !== day) continue;
-      items.push({
-        key: `google:${ev.id}:${ev.start ?? ""}`,
-        source: "google",
-        title: ev.summary,
-        start: ev.start,
-        end: ev.end,
-        htmlLink: ev.htmlLink,
-        attendees: ev.attendees,
-        description: ev.description,
-        location: ev.location,
-        timeZone: ev.timeZone,
-        meetingLinks: ev.meetingLinks,
-      });
-    }
-  } catch (e) {
-    if (!(e instanceof GoogleIntegrationError && e.code === "not_connected")) {
-      console.warn("[timeline] google", e);
+    for (const acc of googleAccountRows as { id: string }[]) {
+      try {
+        const { accessToken } = await getValidGoogleAccessToken(supabase, userId, acc.id);
+        const raw = await fetchGoogleTimelineEvents(accessToken, timeMin, timeMax, 80);
+        for (const ev of raw) {
+          if (eventLocalYmd(ev.start) !== day) continue;
+          items.push({
+            key: `google:${acc.id}:${ev.id}:${ev.start ?? ""}`,
+            source: "google",
+            title: ev.summary,
+            start: ev.start,
+            end: ev.end,
+            htmlLink: ev.htmlLink,
+            attendees: ev.attendees,
+            description: ev.description,
+            location: ev.location,
+            timeZone: ev.timeZone,
+            meetingLinks: ev.meetingLinks,
+          });
+        }
+      } catch (e) {
+        if (!(e instanceof GoogleIntegrationError && e.code === "not_connected")) {
+          console.warn("[timeline] google account", acc.id, e);
+        }
+      }
     }
   }
 
-  try {
-    const { accessToken } = await getValidMicrosoftAccessToken(supabase, userId, null);
+  const { data: msAccountRows, error: msListErr } = await supabase
+    .from("user_connected_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("provider", "microsoft")
+    .order("created_at", { ascending: true });
+
+  if (!msListErr && msAccountRows?.length) {
     outlookConnected = true;
-    const raw = await fetchMicrosoftTimelineEvents(accessToken, timeMin, timeMax);
-    for (const ev of raw) {
-      if (eventLocalYmd(ev.start) !== day) continue;
-      items.push({
-        key: `outlook:${ev.id}:${ev.start ?? ""}`,
-        source: "outlook",
-        title: ev.summary,
-        start: ev.start,
-        end: ev.end,
-        htmlLink: ev.htmlLink,
-        attendees: ev.attendees,
-        description: ev.description,
-        location: ev.location,
-        timeZone: ev.timeZone,
-        meetingLinks: ev.meetingLinks,
-      });
-    }
-  } catch (e) {
-    if (!(e instanceof MicrosoftIntegrationError && e.code === "not_connected")) {
-      console.warn("[timeline] outlook", e);
+    for (const acc of msAccountRows as { id: string }[]) {
+      try {
+        const { accessToken } = await getValidMicrosoftAccessToken(supabase, userId, acc.id);
+        const raw = await fetchMicrosoftTimelineEvents(accessToken, timeMin, timeMax);
+        for (const ev of raw) {
+          if (eventLocalYmd(ev.start) !== day) continue;
+          items.push({
+            key: `outlook:${acc.id}:${ev.id}:${ev.start ?? ""}`,
+            source: "outlook",
+            title: ev.summary,
+            start: ev.start,
+            end: ev.end,
+            htmlLink: ev.htmlLink,
+            attendees: ev.attendees,
+            description: ev.description,
+            location: ev.location,
+            timeZone: ev.timeZone,
+            meetingLinks: ev.meetingLinks,
+          });
+        }
+      } catch (e) {
+        if (!(e instanceof MicrosoftIntegrationError && e.code === "not_connected")) {
+          console.warn("[timeline] outlook account", acc.id, e);
+        }
+      }
     }
   }
 
