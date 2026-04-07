@@ -9,6 +9,7 @@ const MIN_QUERY = 3;
 
 type PeopleSearchResult = {
   person?: {
+    resourceName?: string;
     emailAddresses?: { value?: string; metadata?: { primary?: boolean } }[];
     names?: { displayName?: string; givenName?: string; familyName?: string; metadata?: { primary?: boolean } }[];
   };
@@ -68,11 +69,12 @@ export async function GET(req: Request) {
   }
 
   const results = Array.isArray(json?.results) ? (json.results as PeopleSearchResult[]) : [];
-  const out: { email: string; displayName: string | null }[] = [];
+  const out: { email: string; displayName: string | null; resourceName: string | null }[] = [];
   const seen = new Set<string>();
 
   for (const row of results) {
     const person = row.person;
+    const resourceName = typeof person?.resourceName === "string" ? person.resourceName : null;
     const emails = person?.emailAddresses ?? [];
     const names = person?.names ?? [];
     const displayName =
@@ -85,7 +87,7 @@ export async function GET(req: Request) {
       const email = typeof ea.value === "string" ? ea.value.trim().toLowerCase() : "";
       if (!email || seen.has(email)) continue;
       seen.add(email);
-      out.push({ email, displayName: displayName || null });
+      out.push({ email, displayName: displayName || null, resourceName });
       if (out.length >= 10) break;
     }
     if (out.length >= 10) break;

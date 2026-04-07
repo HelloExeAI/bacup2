@@ -44,6 +44,7 @@ export function GmailRecipientInput({
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [contacts, setContacts] = React.useState<ContactRow[]>([]);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [active, setActive] = React.useState(0);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const reqIdRef = React.useRef(0);
@@ -60,20 +61,41 @@ export function GmailRecipientInput({
     (q: string) => {
       const idNum = ++reqIdRef.current;
       void (async () => {
+        setErrorMsg(null);
         setLoading(true);
+        setOpen(true);
         try {
           const res = await fetch(
             `/api/integrations/google/contacts/search?${new URLSearchParams({ accountId, q })}`,
             { credentials: "include" },
           );
-          const j = (await res.json().catch(() => null)) as { contacts?: ContactRow[] } | null;
+          const j = (await res.json().catch(() => null)) as
+            | { contacts?: ContactRow[]; hint?: string; message?: string; error?: string }
+            | null;
           if (reqIdRef.current !== idNum) return;
+          if (!res.ok) {
+            const msg =
+              typeof j?.hint === "string" && j.hint.trim()
+                ? j.hint.trim()
+                : typeof j?.message === "string" && j.message.trim()
+                  ? j.message.trim()
+                  : typeof j?.error === "string" && j.error.trim()
+                    ? j.error.trim()
+                    : `Search failed (${res.status})`;
+            setErrorMsg(msg);
+            setContacts([]);
+            setActive(0);
+            setOpen(true);
+            return;
+          }
           setContacts(Array.isArray(j?.contacts) ? j!.contacts! : []);
-          setOpen(true);
           setActive(0);
+          setOpen(true);
         } catch {
           if (reqIdRef.current !== idNum) return;
           setContacts([]);
+          setErrorMsg("Search failed. Check your connection and try again.");
+          setOpen(true);
         } finally {
           if (reqIdRef.current === idNum) setLoading(false);
         }
@@ -88,7 +110,10 @@ export function GmailRecipientInput({
     const { current } = splitLastRecipient(next);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (current.length < 3) {
+      reqIdRef.current += 1; // invalidate any in-flight response
       setContacts([]);
+      setErrorMsg(null);
+      setLoading(false);
       setOpen(false);
       return;
     }
@@ -154,7 +179,7 @@ export function GmailRecipientInput({
           aria-autocomplete="list"
           aria-controls={`${id}-listbox`}
         />
-        {open && (contacts.length > 0 || loading) ? (
+        {open && (contacts.length > 0 || loading || !!errorMsg) ? (
           <ul
             id={`${id}-listbox`}
             role="listbox"
@@ -162,6 +187,9 @@ export function GmailRecipientInput({
           >
             {loading && contacts.length === 0 ? (
               <li className="px-3 py-2 text-xs text-muted-foreground">Searching…</li>
+            ) : null}
+            {!loading && errorMsg ? (
+              <li className="px-3 py-2 text-xs text-muted-foreground">{errorMsg}</li>
             ) : null}
             {contacts.map((c, i) => (
               <li key={`${c.email}-${i}`} role="option" aria-selected={i === active}>

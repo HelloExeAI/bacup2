@@ -10,6 +10,7 @@ type Props = {
   isCollapsed: boolean;
   isSelected: boolean;
   setInputRef: (id: string, el: HTMLTextAreaElement | null) => void;
+  onFocus: (id: string) => void;
   onSelectStart: (id: string) => void;
   onToggleCollapse: (id: string) => void;
   onChange: (id: string, value: string) => void;
@@ -23,6 +24,7 @@ export const ScratchpadRow = React.memo(function ScratchpadRow({
   isCollapsed,
   isSelected,
   setInputRef,
+  onFocus,
   onSelectStart,
   onToggleCollapse,
   onChange,
@@ -96,6 +98,7 @@ export const ScratchpadRow = React.memo(function ScratchpadRow({
           data-gramm_editor="false"
           data-enable-grammarly="false"
           onChange={(e) => onChange(block.id, e.target.value)}
+          onFocus={() => onFocus(block.id)}
           onKeyDown={(e) => onKeyDown(block.id, e)}
           style={{ caretColor: "hsl(var(--foreground))" }}
           className="min-h-[20px] w-full resize-none bg-transparent px-0 py-0.5 text-[13px] leading-[18px] text-foreground focus-visible:outline-none"

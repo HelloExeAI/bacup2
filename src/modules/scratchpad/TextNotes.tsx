@@ -69,6 +69,7 @@ export function TextNotes() {
   const dirtyRef = React.useRef(false);
 
   const inputRefs = React.useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const activeBlockIdRef = React.useRef<string | null>(null);
   const loadSeqRef = React.useRef(0);
   const [clarBusy, setClarBusy] = React.useState(false);
   const { scheduleExtract, clarifications, dismissClarification, resolveClarification } = useScratchpadExtraction({
@@ -288,6 +289,24 @@ export function TextNotes() {
       el.selectionStart = el.selectionEnd = el.value.length;
     }, 0);
   }, []);
+
+  const appendTranscriptToActiveBlock = React.useCallback(
+    (text: string) => {
+      const t = text.trim();
+      if (!t) return;
+      const targetId =
+        activeBlockIdRef.current ??
+        (visibleIds.length ? visibleIds[visibleIds.length - 1]! : null);
+      if (!targetId) return;
+      const current = blocksRef.current.find((b) => b.id === targetId);
+      const prev = current?.content ?? "";
+      const next = prev.trim() ? `${prev.replace(/\s+$/g, "")}\n${t}` : t;
+      setBlockPatch(targetId, { content: next });
+      focusEnd(targetId);
+      scheduleExtract();
+    },
+    [focusEnd, scheduleExtract, setBlockPatch, visibleIds],
+  );
 
   const setBlockPatch = React.useCallback((id: string, patch: Partial<Block>) => {
     setBlocks((prev) =>
@@ -571,7 +590,12 @@ export function TextNotes() {
         >
           Today
         </button>
-        <VoiceInput compact />
+        <VoiceInput
+          compact
+          showCompactListeningLabel
+          saveTranscriptToTasks={false}
+          onStop={(final) => appendTranscriptToActiveBlock(final)}
+        />
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
@@ -590,6 +614,9 @@ export function TextNotes() {
                   isSelected={selectedIds.has(block.id)}
                   setInputRef={(id, el) => {
                     inputRefs.current[id] = el;
+                  }}
+                  onFocus={(id) => {
+                    activeBlockIdRef.current = id;
                   }}
                   onSelectStart={(id) => {
                     const active = document.activeElement;

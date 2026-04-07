@@ -276,6 +276,8 @@ export function VoiceInput({
         }
         wsRef.current = null;
         recorderRef.current = null;
+        // Ensure we fully tear down the stream/recorder if Deepgram drops unexpectedly.
+        if (streamRef.current || recordingStartedAtRef.current != null) void stop();
       };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Microphone permission denied.";
@@ -340,9 +342,30 @@ export function VoiceInput({
             />
           </svg>
         </button>
-        {showCompactListeningLabel ? (
-          <span className="text-[11px] text-muted-foreground">{listening ? "Stop" : "Mic"}</span>
+
+        {listening ? (
+          <button
+            type="button"
+            onClick={() => void stop()}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/50 bg-red-500/10 text-red-600 shadow-sm hover:bg-red-500/15 dark:text-red-400"
+            aria-label="Stop recording"
+            title="Stop recording"
+          >
+            <span className="h-3.5 w-3.5 rounded-[3px] bg-current" aria-hidden="true" />
+          </button>
         ) : null}
+
+        {showCompactListeningLabel ? (
+          <span className="text-[11px] text-muted-foreground">{listening ? "Listening…" : "Mic"}</span>
+        ) : null}
+
+        {listening && (finalText || live) ? (
+          <div className="max-w-[22rem] truncate text-[11px] text-muted-foreground" title={`${finalText}${live ? ` ${live}` : ""}`.trim()}>
+            {finalText ? <span className="text-foreground/90">{finalText}</span> : null}
+            {live ? <span> {live}</span> : null}
+          </div>
+        ) : null}
+
         {error ? <div className="text-xs text-muted-foreground">{error}</div> : null}
       </div>
     );
