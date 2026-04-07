@@ -290,6 +290,19 @@ export function TextNotes() {
     }, 0);
   }, []);
 
+  const setBlockPatch = React.useCallback((id: string, patch: Partial<Block>) => {
+    setBlocks((prev) =>
+      sortBlocks(
+        prev.map((b) => {
+          if (b.id !== id) return b;
+          return { ...b, ...patch };
+        }),
+      ),
+    );
+    dirtyRef.current = true;
+    scheduleFlush();
+  }, [scheduleFlush]);
+
   const appendTranscriptToActiveBlock = React.useCallback(
     (text: string) => {
       const t = text.trim();
@@ -307,19 +320,6 @@ export function TextNotes() {
     },
     [focusEnd, scheduleExtract, setBlockPatch, visibleIds],
   );
-
-  const setBlockPatch = React.useCallback((id: string, patch: Partial<Block>) => {
-    setBlocks((prev) =>
-      sortBlocks(
-        prev.map((b) => {
-          if (b.id !== id) return b;
-          return { ...b, ...patch };
-        }),
-      ),
-    );
-    dirtyRef.current = true;
-    scheduleFlush();
-  }, [scheduleFlush]);
 
   const reindexChildren = React.useCallback((parentId: string | null) => {
     setBlocks((prev) => {
