@@ -7,6 +7,8 @@ const ALLOW_UNAUTHED = [
   "/login",
   "/auth/callback",
   "/auth/sign-out",
+  "/sitemap.xml",
+  "/robots.txt",
 ] as const;
 
 export function allowPathWithoutSession(pathname: string): boolean {
