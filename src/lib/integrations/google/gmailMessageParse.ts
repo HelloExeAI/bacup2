@@ -236,6 +236,19 @@ export type OutgoingAttachment = {
   dataBase64: string;
 };
 
+/**
+ * Wraps a fragment in a minimal HTML5 document with Montserrat + default line-height for email clients.
+ * Skips if the body already looks like a full document.
+ */
+export function wrapOutgoingEmailHtml(fragment: string): string {
+  const trimmed = fragment.trim();
+  if (!trimmed) return trimmed;
+  if (/^<!DOCTYPE/i.test(trimmed) || /<html[\s>]/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width"/><link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet"/><style type="text/css">body{margin:0;padding:0;font-family:'Montserrat',Helvetica,Arial,sans-serif;line-height:1.5;}p,li,div,blockquote,td{line-height:1.5;}</style></head><body><div style="font-family:'Montserrat',Helvetica,Arial,sans-serif;line-height:1.5;">${trimmed}</div></body></html>`;
+}
+
 /** Full RFC 2822 message: multipart/alternative, or multipart/mixed wrapping alternative + attachments. */
 export function buildEmailMime(opts: {
   to: string;
@@ -249,7 +262,8 @@ export function buildEmailMime(opts: {
 }): string {
   const altB = `bacup_alt_${randomBytes(10).toString("hex")}`;
   const plainB64 = wrapB64(Buffer.from(opts.textPlain, "utf8").toString("base64"));
-  const htmlB64 = wrapB64(Buffer.from(opts.html, "utf8").toString("base64"));
+  const htmlWrapped = wrapOutgoingEmailHtml(opts.html);
+  const htmlB64 = wrapB64(Buffer.from(htmlWrapped, "utf8").toString("base64"));
   const altInner = [
     `--${altB}`,
     "Content-Type: text/plain; charset=UTF-8",

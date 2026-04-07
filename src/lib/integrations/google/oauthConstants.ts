@@ -1,5 +1,5 @@
 /**
- * Gmail read + send, Calendar read.
+ * Gmail read + send, Calendar read, People otherContacts search (recipient autocomplete).
  * Users must reconnect Google in Settings after scope changes.
  */
 export const GOOGLE_OAUTH_SCOPES = [
@@ -9,6 +9,7 @@ export const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/contacts.other.readonly",
 ] as const;
 
 export const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";

@@ -53,24 +53,43 @@ export function IconRedraft() {
   );
 }
 
+export type RedraftApplyPayload = {
+  html: string;
+  /** Only set when `includeSubject` (new compose). */
+  subject?: string;
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
   /** Current editor HTML when the panel opens (snapshotted on open transition). */
   initialHtml: string;
-  onApply: (sanitizedHtml: string) => void;
+  onApply: (payload: RedraftApplyPayload) => void;
   panelId?: string;
+  /** New email only: API returns subject + body; "Use this" fills both. */
+  includeSubject?: boolean;
+  /** Current subject when redrafting new mail (optional context for the model). */
+  currentSubject?: string;
 };
 
 /**
  * AI redraft UI: instructions → preview → Use this / Redraft again.
  * Parent controls visibility with `open`; pass `initialHtml` from the live editor each render.
  */
-export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, panelId = "gmail-email-redraft-panel" }: Props) {
+export function GmailEmailRedraftPanel({
+  open,
+  onClose,
+  initialHtml,
+  onApply,
+  panelId = "gmail-email-redraft-panel",
+  includeSubject = false,
+  currentSubject = "",
+}: Props) {
   const [step, setStep] = React.useState<"instructions" | "preview">("instructions");
   const [instruction, setInstruction] = React.useState("");
   const [sourceHtml, setSourceHtml] = React.useState("");
   const [previewHtml, setPreviewHtml] = React.useState<string | null>(null);
+  const [previewSubject, setPreviewSubject] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const prevOpenRef = React.useRef(false);
@@ -80,6 +99,7 @@ export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, pa
       setSourceHtml(initialHtml);
       setInstruction("");
       setPreviewHtml(null);
+      setPreviewSubject(null);
       setStep("instructions");
       setErr(null);
     }
@@ -102,6 +122,8 @@ export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, pa
         body: JSON.stringify({
           htmlBody: sourceHtml,
           instructions: instr,
+          composeMode: includeSubject ? "new" : "reply",
+          currentSubject: includeSubject ? currentSubject : undefined,
         }),
       });
       const j = (await res.json().catch(() => null)) as Record<string, unknown> | null;
@@ -121,6 +143,11 @@ export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, pa
         return;
       }
       setPreviewHtml(sanitizeEmailHtml(html));
+      if (includeSubject && typeof j?.subject === "string" && j.subject.trim()) {
+        setPreviewSubject(j.subject.trim());
+      } else {
+        setPreviewSubject(null);
+      }
       setStep("preview");
     } catch {
       setErr("Redraft failed.");
@@ -131,7 +158,11 @@ export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, pa
 
   const usePreview = () => {
     if (!previewHtml) return;
-    onApply(previewHtml);
+    if (includeSubject && previewSubject) {
+      onApply({ html: previewHtml, subject: previewSubject });
+    } else {
+      onApply({ html: previewHtml });
+    }
     onClose();
   };
 
@@ -140,6 +171,7 @@ export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, pa
     setSourceHtml(previewHtml);
     setInstruction("");
     setPreviewHtml(null);
+    setPreviewSubject(null);
     setStep("instructions");
     setErr(null);
   };
@@ -148,6 +180,7 @@ export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, pa
     setErr(null);
     setLoading(false);
     setPreviewHtml(null);
+    setPreviewSubject(null);
     onClose();
   };
 
@@ -191,9 +224,17 @@ export function GmailEmailRedraftPanel({ open, onClose, initialHtml, onApply, pa
         </>
       ) : (
         <>
-          <p className="text-[11px] font-medium text-foreground">Preview</p>
+          {includeSubject && previewSubject ? (
+            <>
+              <p className="text-[11px] font-medium text-foreground">Subject</p>
+              <p className="rounded-md border border-border/50 bg-background px-3 py-2 text-sm font-medium text-foreground">
+                {previewSubject}
+              </p>
+            </>
+          ) : null}
+          <p className="text-[11px] font-medium text-foreground">Body</p>
           <div
-            className="max-h-[min(40vh,280px)] overflow-y-auto rounded-md border border-border/50 bg-background p-3 text-sm leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_p]:my-1"
+            className="max-h-[min(40vh,280px)] overflow-y-auto rounded-md border border-border/50 bg-background p-3 text-sm leading-[1.5] [&_a]:text-blue-600 [&_a]:underline [&_p]:my-1"
             dangerouslySetInnerHTML={{ __html: previewHtml ?? "" }}
           />
           <div className="flex flex-wrap items-center gap-2">

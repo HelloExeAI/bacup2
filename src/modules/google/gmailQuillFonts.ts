@@ -1,6 +1,6 @@
 /**
  * Quill font picker: alphabetically sorted display names, slug must match CSS in ./gmailQuillFonts.css.
- * Default font for new content: Times New Roman (see GMAIL_DEFAULT_FONT).
+ * Default font for new content: Montserrat (see GMAIL_DEFAULT_FONT).
  */
 const FONT_ENTRIES: { slug: string; label: string }[] = [
   { slug: "arial", label: "Arial" },
@@ -17,6 +17,7 @@ const FONT_ENTRIES: { slug: string; label: string }[] = [
   { slug: "impact", label: "Impact" },
   { slug: "lucida-console", label: "Lucida Console" },
   { slug: "lucida-sans", label: "Lucida Sans" },
+  { slug: "montserrat", label: "Montserrat" },
   { slug: "palatino", label: "Palatino" },
   { slug: "segoe-ui", label: "Segoe UI" },
   { slug: "tahoma", label: "Tahoma" },
@@ -27,8 +28,8 @@ const FONT_ENTRIES: { slug: string; label: string }[] = [
 
 FONT_ENTRIES.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
 
-/** Default font class when composing (Times New Roman). */
-export const GMAIL_DEFAULT_FONT = "times-new-roman";
+/** Default font class when composing. */
+export const GMAIL_DEFAULT_FONT = "montserrat";
 
 /**
  * Quill font picker values (no `false` — all fonts are explicit classes).

@@ -157,6 +157,10 @@ export function WatchListModal({
     }
     return list.sort((a, b) => {
       if (a.status !== b.status) return a.status === "pending" ? -1 : 1;
+      const dc = a.due_date.localeCompare(b.due_date);
+      if (dc !== 0) return dc;
+      const tc = String(a.due_time ?? "").localeCompare(String(b.due_time ?? ""));
+      if (tc !== 0) return tc;
       return (b.created_at ?? "").localeCompare(a.created_at ?? "");
     });
   }, [dueDateFilter, tasks]);

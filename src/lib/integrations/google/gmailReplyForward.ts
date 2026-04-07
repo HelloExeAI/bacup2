@@ -90,7 +90,7 @@ export async function buildReplyForwardRawAndThread(params: {
       originalBody || "(no body)",
     ].join("\n");
     bodyText = fwdPlain;
-    bodyHtml = `${htmlFinal}<hr/><p style="font-size:12px;font-weight:600;color:#555">---------- Forwarded message ---------</p><p style="font-size:12px;line-height:1.5">From: ${escapeHtml(fromHeader)}<br/>Date: ${escapeHtml(headers["date"] ?? "")}<br/>Subject: ${escapeHtml(subjectOrig)}</p><pre style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:13px;margin:0;padding:12px;border-radius:8px;background:rgba(0,0,0,.04)">${escapeHtml(originalBody || "(no body)")}</pre>`;
+    bodyHtml = `${htmlFinal}<hr/><p style="font-size:12px;font-weight:600;color:#555;font-family:Montserrat,Helvetica,Arial,sans-serif;line-height:1.5">---------- Forwarded message ---------</p><p style="font-size:12px;line-height:1.5;font-family:Montserrat,Helvetica,Arial,sans-serif">From: ${escapeHtml(fromHeader)}<br/>Date: ${escapeHtml(headers["date"] ?? "")}<br/>Subject: ${escapeHtml(subjectOrig)}</p><pre style="white-space:pre-wrap;font-family:Montserrat,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;margin:0;padding:12px;border-radius:8px;background:rgba(0,0,0,.04)">${escapeHtml(originalBody || "(no body)")}</pre>`;
   } else {
     subject = subject || replySubject(subjectOrig);
   }

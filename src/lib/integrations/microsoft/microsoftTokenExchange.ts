@@ -1,6 +1,18 @@
 import { microsoftClientId, microsoftClientSecret } from "@/lib/integrations/microsoft/microsoftEnv";
 import { MICROSOFT_GRAPH_ME, MICROSOFT_TOKEN_URL } from "@/lib/integrations/microsoft/oauthConstants";
 
+/** Thrown when Microsoft token endpoint returns a non-OK response; `oauthError` is the OAuth `error` field. */
+export class MicrosoftTokenExchangeError extends Error {
+  constructor(
+    message: string,
+    public readonly oauthError: string,
+    public readonly oauthDescription?: string,
+  ) {
+    super(message);
+    this.name = "MicrosoftTokenExchangeError";
+  }
+}
+
 export type MicrosoftTokenResponse = {
   access_token: string;
   expires_in: number;
@@ -37,7 +49,12 @@ export async function exchangeMicrosoftAuthorizationCode(
   if (!res.ok) {
     const err = typeof j?.error === "string" ? j.error : "token_error";
     const desc = typeof j?.error_description === "string" ? j.error_description : "";
-    throw new Error(`Microsoft token exchange failed: ${err}${desc ? ` — ${desc}` : ""}`);
+    console.error("[microsoft/token] exchange failed", res.status, err, desc);
+    throw new MicrosoftTokenExchangeError(
+      `Microsoft token exchange failed: ${err}${desc ? ` — ${desc}` : ""}`,
+      err,
+      desc,
+    );
   }
 
   const access_token = typeof j?.access_token === "string" ? j.access_token : "";

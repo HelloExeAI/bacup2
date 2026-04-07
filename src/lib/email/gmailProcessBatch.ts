@@ -1,9 +1,12 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
-import { defaultDueTimeQuarterHour } from "@/lib/datetime/quarterHour";
 import { assignSequentialDueTimesForToday } from "@/lib/scheduling/assignDueTimesFromCalendar";
 import { calendarYmdInTimeZone } from "@/lib/email/calendarYmd";
-import { ymdToday } from "@/modules/tasks/dayBriefing";
+import {
+  emailTaskDedupeKey,
+  normalizeTaskTypeForSelf,
+  resolveExtractionSchedule,
+} from "@/lib/tasks/taskScheduleResolution";
 import {
   filterJunkTaskTitles,
   shouldSkipLowValueEmailStream,
@@ -89,9 +92,15 @@ export async function runGmailProcessBatch(
     .eq("status", "pending");
 
   const existingKeys = new Set(
-    (existingEmailTasks ?? []).map(
-      (t: { title?: string; type?: string; due_date?: string; gmail_message_id?: string }) =>
-        `${t.gmail_message_id ?? ""}|${String(t.title ?? "").toLowerCase()}|${String(t.type ?? "")}|${String(t.due_date ?? "")}`,
+    (existingEmailTasks ?? []).flatMap(
+      (t: { title?: string; type?: string; due_date?: string; gmail_message_id?: string }) => {
+        const mid = String(t.gmail_message_id ?? "");
+        const title = String(t.title ?? "");
+        return [
+          emailTaskDedupeKey(mid, title),
+          `${mid}|${title.toLowerCase()}|${String(t.type ?? "")}|${String(t.due_date ?? "")}`,
+        ];
+      },
     ),
   );
 
@@ -203,23 +212,53 @@ export async function runGmailProcessBatch(
       }
     }
 
-    const todayStr = ymdToday();
-    const insertableTodayCount = taskPayload.filter((t) => {
-      const key = `${messageId}|${t.title.toLowerCase()}|${t.type}|${String(t.due_date ?? "")}`;
-      return !existingKeys.has(key) && (t.due_date ?? defaultDueYmd) === todayStr;
-    }).length;
+    const todayStr = defaultDueYmd;
+
+    type PreparedEmailTask = (typeof taskPayload)[number] & {
+      due_date: string;
+      due_time: string;
+      useCalendarSlot: boolean;
+    };
+
+    const prepared: PreparedEmailTask[] = [];
+    const seenFp = new Set<string>();
+    for (const raw of taskPayload) {
+      const type = normalizeTaskTypeForSelf(raw.type, raw.assigned_to);
+      const resolved = resolveExtractionSchedule({
+        title: raw.title,
+        aiDueDate: raw.due_date,
+        aiDueTime: raw.due_time,
+        defaultYmd: defaultDueYmd,
+        timeZone: tz,
+        allowCalendarSlots: true,
+      });
+      const fp = emailTaskDedupeKey(messageId, raw.title);
+      if (seenFp.has(fp)) continue;
+      seenFp.add(fp);
+      prepared.push({
+        ...raw,
+        type,
+        due_date: resolved.due_date,
+        due_time: resolved.due_time,
+        useCalendarSlot: resolved.useCalendarSlot,
+      });
+    }
+
+    const slotNeedCount = prepared.filter(
+      (t) => t.useCalendarSlot && t.due_date === todayStr && !existingKeys.has(emailTaskDedupeKey(messageId, t.title)),
+    ).length;
     const todaySlotPool =
-      insertableTodayCount > 0
-        ? await assignSequentialDueTimesForToday(supabase, user.id, todayStr, insertableTodayCount)
+      slotNeedCount > 0
+        ? await assignSequentialDueTimesForToday(supabase, user.id, todayStr, slotNeedCount)
         : [];
     let todaySlotIdx = 0;
 
-    for (const t of taskPayload) {
-      const key = `${messageId}|${t.title.toLowerCase()}|${t.type}|${String(t.due_date ?? "")}`;
+    for (const t of prepared) {
+      const key = emailTaskDedupeKey(messageId, t.title);
       if (existingKeys.has(key)) continue;
-      const dueDate = t.due_date ?? defaultDueYmd;
-      let dueTime = t.due_time ?? defaultDueTimeQuarterHour();
-      if (dueDate === todayStr) {
+      const dueDate = t.due_date;
+      let dueTime = t.due_time;
+      if (t.useCalendarSlot && dueDate === todayStr) {
         dueTime = todaySlotPool[todaySlotIdx] ?? dueTime;
         todaySlotIdx += 1;
       }

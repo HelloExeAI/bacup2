@@ -9,6 +9,15 @@
   font-size: 11px;
 }
 
+.gmail-quill-fullscreen .ql-editor {
+  line-height: 1.5;
+}
+
+.gmail-quill-fullscreen .ql-editor p,
+.gmail-quill-fullscreen .ql-editor li {
+  line-height: 1.5;
+}
+
 /* Extra Quill font classes + toolbar labels (Quill 2 uses .ql-font-{value}) */
 .ql-editor .ql-font-arial {
   font-family: Arial, Helvetica, sans-serif;
@@ -39,6 +48,9 @@
 }
 .ql-editor .ql-font-lucida-sans {
   font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+}
+.ql-editor .ql-font-montserrat {
+  font-family: Montserrat, Helvetica, Arial, sans-serif;
 }
 .ql-editor .ql-font-lucida-console {
   font-family: "Lucida Console", Monaco, monospace;
@@ -124,6 +136,11 @@
 .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="lucida-sans"]::before {
   content: "Lucida Sans";
   font-family: "Lucida Sans Unicode", sans-serif;
+}
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="montserrat"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="montserrat"]::before {
+  content: "Montserrat";
+  font-family: Montserrat, Helvetica, Arial, sans-serif;
 }
 .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="lucida-console"]::before,
 .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="lucida-console"]::before {

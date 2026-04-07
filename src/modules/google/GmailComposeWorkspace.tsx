@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { GmailEmailRedraftPanel, IconRedraft, plainEmailBody } from "@/modules/google/GmailEmailRedraftPanel";
+import { GmailRecipientInput } from "@/modules/google/GmailRecipientInput";
 import { GmailQuillEditor } from "@/modules/google/GmailQuillEditor";
 import { GMAIL_QUILL_FONT_OPTIONS } from "@/modules/google/gmailQuillFonts";
 import { GMAIL_QUILL_SIZE_PX_OPTIONS } from "@/modules/google/gmailQuillSizes";
@@ -275,15 +276,15 @@ export function GmailComposeWorkspace({
       ) : null}
 
       <div className="shrink-0 space-y-2 border-b border-border/60 p-3">
-        <label className="block space-y-1">
-          <span className="text-[11px] font-medium text-muted-foreground">To</span>
-          <input
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="h-10 w-full rounded-md border border-border/70 bg-background px-3 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            placeholder="recipient@example.com"
-          />
-        </label>
+        <GmailRecipientInput
+          accountId={accountId}
+          id="gmail-compose-to"
+          label="To"
+          value={to}
+          onChange={setTo}
+          placeholder="Name or email"
+          disabled={sending}
+        />
 
         {(!showCc || !showBcc) && (
           <div className="flex flex-wrap items-center gap-2">
@@ -313,11 +314,14 @@ export function GmailComposeWorkspace({
                 Remove
               </button>
             </div>
-            <input
+            <GmailRecipientInput
+              accountId={accountId}
+              id="gmail-compose-cc"
+              label="Cc"
               value={cc}
-              onChange={(e) => setCc(e.target.value)}
-              className="h-10 w-full rounded-md border border-border/70 bg-background px-3 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              onChange={setCc}
               placeholder="Optional"
+              disabled={sending}
             />
           </div>
         ) : null}
@@ -335,11 +339,14 @@ export function GmailComposeWorkspace({
                 Remove
               </button>
             </div>
-            <input
+            <GmailRecipientInput
+              accountId={accountId}
+              id="gmail-compose-bcc"
+              label="Bcc"
               value={bcc}
-              onChange={(e) => setBcc(e.target.value)}
-              className="h-10 w-full rounded-md border border-border/70 bg-background px-3 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              onChange={setBcc}
               placeholder="Optional"
+              disabled={sending}
             />
           </div>
         ) : null}
@@ -397,7 +404,12 @@ export function GmailComposeWorkspace({
           open={redraftOpen}
           onClose={() => setRedraftOpen(false)}
           initialHtml={editorHtml}
-          onApply={(html) => setEditorHtml(html)}
+          includeSubject
+          currentSubject={subj}
+          onApply={({ html, subject }) => {
+            setEditorHtml(html);
+            if (typeof subject === "string" && subject.trim()) setSubj(subject);
+          }}
           panelId="gmail-compose-redraft-panel"
         />
 

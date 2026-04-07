@@ -4,6 +4,7 @@ import * as React from "react";
 import DOMPurify from "dompurify";
 
 import { GmailEmailRedraftPanel, IconRedraft, plainEmailBody } from "@/modules/google/GmailEmailRedraftPanel";
+import { GmailRecipientInput } from "@/modules/google/GmailRecipientInput";
 import { GmailQuillEditor } from "@/modules/google/GmailQuillEditor";
 import { VoiceInput } from "@/modules/scratchpad/VoiceInput";
 import { GMAIL_QUILL_FONT_OPTIONS } from "@/modules/google/gmailQuillFonts";
@@ -573,7 +574,7 @@ export function GmailThreadWorkspace({
               </dl>
 
               <div
-                className="email-body-html min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-border/35 bg-muted/20 p-3 text-sm leading-relaxed print:overflow-visible print:border-0 print:bg-white"
+                className="email-body-html min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-border/35 bg-muted/20 p-3 text-sm leading-[1.5] print:overflow-visible print:border-0 print:bg-white"
                 style={{ lineHeight: 1.5 }}
               >
                 <div className="prose-email max-w-none [&_img]:max-w-full [&_img]:h-auto [&_a]:text-blue-600 [&_a]:underline" dangerouslySetInnerHTML={{ __html: safeHtml }} />
@@ -622,24 +623,24 @@ export function GmailThreadWorkspace({
           ) : null}
 
           <div className="shrink-0 space-y-2 border-b border-border/60 p-3">
-            <label className="block space-y-1">
-              <span className="text-[11px] font-medium text-muted-foreground">To</span>
-              <input
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="h-10 w-full rounded-md border border-border/70 bg-background px-3 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                placeholder="recipient@example.com"
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-[11px] font-medium text-muted-foreground">Cc</span>
-              <input
-                value={cc}
-                onChange={(e) => setCc(e.target.value)}
-                className="h-10 w-full rounded-md border border-border/70 bg-background px-3 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                placeholder="Optional"
-              />
-            </label>
+            <GmailRecipientInput
+              accountId={thread.accountId}
+              id="gmail-thread-compose-to"
+              label="To"
+              value={to}
+              onChange={setTo}
+              placeholder="Name or email"
+              disabled={sending}
+            />
+            <GmailRecipientInput
+              accountId={thread.accountId}
+              id="gmail-thread-compose-cc"
+              label="Cc"
+              value={cc}
+              onChange={setCc}
+              placeholder="Optional"
+              disabled={sending}
+            />
             <label className="block space-y-1">
               <span className="text-[11px] font-medium text-muted-foreground">Subject</span>
               <input
@@ -715,7 +716,7 @@ export function GmailThreadWorkspace({
               open={redraftOpen}
               onClose={() => setRedraftOpen(false)}
               initialHtml={editorHtml}
-              onApply={(html) => setEditorHtml(html)}
+              onApply={({ html }) => setEditorHtml(html)}
               panelId="gmail-thread-compose-redraft"
             />
 

@@ -2,6 +2,8 @@
  * OpenAI extraction for Gmail bodies — mirrors scratchpad extract shape.
  */
 
+import { normalizeTaskTypeForSelf } from "@/lib/tasks/taskScheduleResolution";
+
 export type ExtractedEmailTask = {
   title: string;
   type: "todo" | "followup" | "reminder";
@@ -124,7 +126,9 @@ function coerceTasks(json: unknown): ExtractedEmailTask[] {
     const assigned_to =
       typeof it.assigned_to === "string" && it.assigned_to.trim() ? it.assigned_to.trim() : "self";
     if (!title) continue;
-    const normalizedType = !isSelfAssignee(assigned_to) && type === "todo" ? "followup" : type;
+    let normalizedType: "todo" | "followup" | "reminder" =
+      !isSelfAssignee(assigned_to) && type === "todo" ? "followup" : type;
+    normalizedType = normalizeTaskTypeForSelf(normalizedType, assigned_to);
     out.push({
       title: professionalizeTitle(title),
       type: normalizedType,
@@ -175,8 +179,11 @@ Rules:
       ? "One concise line (max 140 chars) describing what the email is about / what matters. No quotes."
       : 'Empty string ""'
   }
-- tasks: same rules as Bacup scratchpad — title imperative and polished; type todo|followup|reminder; due_date YYYY-MM-DD or null; due_time HH:MM or null; assigned_to default "self".
+- tasks: same rules as Bacup scratchpad — title imperative and polished; type todo|followup|reminder; due_date YYYY-MM-DD or null; due_time HH:MM (24h) or null; assigned_to default "self".
+- CRITICAL: Put real deadlines in due_date and due_time — do NOT bury the only schedule in the title. If the email says "tomorrow 10:30am", set due_date to that calendar day and due_time to 10:30 (use 24h: 10:30).
+- For "tomorrow", "next Friday", "this Monday", compute the actual YYYY-MM-DD in the user's timezone using default_due_ymd as "today".
 - If a due date is implied as "today", use the provided default_due_ymd.
+- followup: only when someone else must act or you are waiting on another person; otherwise use todo.
 - Keep task titles under 90 characters.`;
 
   const userMsg = `default_due_ymd: ${params.defaultDueYmd}

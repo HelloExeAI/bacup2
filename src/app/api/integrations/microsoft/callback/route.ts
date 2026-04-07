@@ -5,6 +5,7 @@ import { microsoftRedirectUriFromRequest } from "@/lib/integrations/microsoft/mi
 import {
   exchangeMicrosoftAuthorizationCode,
   fetchMicrosoftUserProfile,
+  MicrosoftTokenExchangeError,
 } from "@/lib/integrations/microsoft/microsoftTokenExchange";
 import { decodeMicrosoftOAuthState } from "@/lib/integrations/microsoft/oauthState";
 import { mergePrimaryOAuthIntoProfile, uploadMicrosoftGraphPhotoToAvatar } from "@/lib/profile/mergeOAuthProfile";
@@ -142,6 +143,13 @@ export async function GET(req: Request) {
     return finishRedirect(req, { integrations: "microsoft_connected" }, "/scratchpad");
   } catch (e) {
     console.error("[microsoft/oauth/callback]", e);
-    return finishRedirect(req, { integrations: "microsoft_error", reason: "exchange" });
+    let reason = "exchange";
+    if (e instanceof MicrosoftTokenExchangeError) {
+      reason = e.oauthError;
+    } else if (e instanceof Error) {
+      if (e.message.includes("Failed to load Microsoft profile")) reason = "profile";
+      else if (e.message.includes("Microsoft profile missing")) reason = "profile_email";
+    }
+    return finishRedirect(req, { integrations: "microsoft_error", reason });
   }
 }

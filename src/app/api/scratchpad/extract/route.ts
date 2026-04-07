@@ -5,10 +5,15 @@ import { createHash } from "node:crypto";
 import { assertOpenAIQuotaAvailable, recordOpenAITokenUsage } from "@/lib/billing/aiQuota";
 import { extractOpenAIUsageFromChatCompletion } from "@/lib/billing/openaiUsageFromResponse";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { calendarYmdInTimeZone } from "@/lib/email/calendarYmd";
 import { defaultDueTimeQuarterHour } from "@/lib/datetime/quarterHour";
 import { assignSequentialDueTimesForToday } from "@/lib/scheduling/assignDueTimesFromCalendar";
 import { parseTasks } from "@/modules/scratchpad/parser";
-import { ymdToday } from "@/modules/tasks/dayBriefing";
+import {
+  normalizeTaskTypeForSelf,
+  normalizeTitleFingerprint,
+  resolveExtractionSchedule,
+} from "@/lib/tasks/taskScheduleResolution";
 
 const BodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -152,7 +157,9 @@ function coerceTasks(json: unknown): ExtractedTask[] {
         ? it.assigned_to.trim()
         : "self";
     if (!title) continue;
-    const normalizedType = !isSelfAssignee(assigned_to) && type === "todo" ? "followup" : type;
+    let normalizedType: "todo" | "followup" | "reminder" =
+      !isSelfAssignee(assigned_to) && type === "todo" ? "followup" : type;
+    normalizedType = normalizeTaskTypeForSelf(normalizedType, assigned_to);
     out.push({
       title: professionalizeTitle(title),
       type: normalizedType,
@@ -300,11 +307,13 @@ Rules:
 - title must be rewritten in clean professional language (imperative, concise, polished).
 - title must NOT copy noisy/raw phrasing from notes verbatim when it can be clarified.
 - type must be one of: "todo", "followup", "reminder".
-- due_date must be YYYY-MM-DD or null.
+- due_date must be YYYY-MM-DD or null (never put the only deadline inside the title).
 - due_time must be HH:MM (24h) or null.
 - assigned_to default "self".
 - If an item implies it should be done on the selected day, set due_date to the provided date.
-- When the selected date is TODAY, you may leave due_time null — the server assigns the next free 15-minute slot after the current time using calendars and existing tasks.
+- For "tomorrow", weekdays, or explicit times (e.g. 10:30am), compute due_date and due_time; do not rely on the title alone.
+- followup only when waiting on someone else; otherwise todo.
+- When the selected calendar day is today in the user's timezone, you may leave due_time null only if no time is implied — the server may assign the next free 15-minute slot using calendars.
 - Keep titles short (<= 80 chars), remove trailing punctuation.`;
 
   const userMsg = `Selected date: ${date}
@@ -390,22 +399,57 @@ ${text}`;
     modelUsed = null;
     const fallback = parseTasks(text)
       .slice(0, 25)
-      .map((t) => ({
-        title: professionalizeTitle(t.title),
-        type: !isSelfAssignee(t.assigned_to) && t.type === "todo" ? "followup" : t.type,
-        // Keep null when not explicitly present so SAM can ask user.
-        due_date: t.due_date,
-        due_time: t.due_time,
-        assigned_to: t.assigned_to || "self",
-      }));
+      .map((t) => {
+        let ty: "todo" | "followup" | "reminder" =
+          !isSelfAssignee(t.assigned_to) && t.type === "todo" ? "followup" : t.type;
+        ty = normalizeTaskTypeForSelf(ty, t.assigned_to || "self");
+        return {
+          title: professionalizeTitle(t.title),
+          type: ty,
+          due_date: t.due_date,
+          due_time: t.due_time,
+          assigned_to: t.assigned_to || "self",
+        };
+      });
     extracted = fallback;
   }
 
   if (extracted.length === 0) return NextResponse.json({ tasks: [] });
 
-  const normalized = extracted.slice(0, 25).map((t) => ({
+  const { data: profileTz } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .maybeSingle();
+  const tz = typeof profileTz?.timezone === "string" ? profileTz.timezone : "UTC";
+  const todayInUserTz = calendarYmdInTimeZone(tz);
+  const isSelectedToday = date === todayInUserTz;
+
+  const seenRun = new Set<string>();
+  const enriched = extracted.slice(0, 25).flatMap((t) => {
+    const resolved = resolveExtractionSchedule({
+      title: t.title,
+      aiDueDate: t.due_date,
+      aiDueTime: t.due_time,
+      defaultYmd: date,
+      timeZone: tz,
+      allowCalendarSlots: isSelectedToday,
+    });
+    const row = {
+      ...t,
+      due_date: resolved.due_date,
+      due_time: resolved.due_time,
+      useCalendarSlot: resolved.useCalendarSlot,
+    };
+    const dedupeKey = `${normalizeTitleFingerprint(row.title)}|${row.type}|${row.due_date}`;
+    if (seenRun.has(dedupeKey)) return [];
+    seenRun.add(dedupeKey);
+    return [row];
+  });
+
+  const normalized = enriched.map((t) => ({
     ...t,
-    normalized_key: `${t.title.toLowerCase()}|${t.type}|${t.due_date ?? ""}`,
+    normalized_key: `${normalizeTitleFingerprint(t.title)}|${t.type}|${t.due_date}`,
   }));
 
   const { error: clearActionsErr } = await supabase
@@ -445,34 +489,45 @@ ${text}`;
     return NextResponse.json({ error: existingTasksErr.message }, { status: 500 });
   }
   const existingSet = new Set(
-    (existingTasks ?? []).map(
-      (t: { title?: unknown; type?: unknown; due_date?: unknown }) =>
-        `${String(t.title ?? "").toLowerCase()}|${String(t.type ?? "")}|${String(t.due_date ?? "")}`,
-    ),
+    (existingTasks ?? []).flatMap((t: { title?: unknown; type?: unknown; due_date?: unknown }) => {
+      const title = String(t.title ?? "");
+      const typ = String(t.type ?? "");
+      const dd = String(t.due_date ?? "");
+      return [
+        `${title.toLowerCase()}|${typ}|${dd}`,
+        `${normalizeTitleFingerprint(title)}|${typ}|${dd}`,
+      ];
+    }),
   );
 
   const filteredForInsert = normalized.filter((t) => !existingSet.has(t.normalized_key));
-  const isSelectedToday = date === ymdToday();
+  const slotNeed = filteredForInsert.filter((t) => t.useCalendarSlot && t.due_date === date).length;
   const slotPool =
-    isSelectedToday && filteredForInsert.length > 0
-      ? await assignSequentialDueTimesForToday(supabase, user.id, date, filteredForInsert.length)
+    isSelectedToday && slotNeed > 0
+      ? await assignSequentialDueTimesForToday(supabase, user.id, date, slotNeed)
       : [];
+  let slotIdx = 0;
 
-  const toInsert = filteredForInsert.map((t, i) => ({
+  const toInsert = filteredForInsert.map((t) => {
+    let dueTime = t.due_time ?? defaultDueTimeQuarterHour();
+    if (t.useCalendarSlot && t.due_date === date) {
+      dueTime = slotPool[slotIdx] ?? dueTime;
+      slotIdx += 1;
+    }
+    return {
     user_id: user.id,
     title: t.title,
     description: null,
     due_date: t.due_date ?? date,
-    due_time: isSelectedToday
-      ? slotPool[i] ?? t.due_time ?? defaultDueTimeQuarterHour()
-      : t.due_time ?? defaultDueTimeQuarterHour(),
+    due_time: dueTime,
     type: t.type,
     assigned_to: t.assigned_to || "self",
     status: "pending",
     completed_at: null,
     source: "scratchpad",
     extraction_run_id: runId,
-  }));
+  };
+  });
 
   let inserted: InsertedTask[] = [];
   if (toInsert.length > 0) {

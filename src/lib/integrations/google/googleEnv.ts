@@ -36,10 +36,17 @@ export function googleStateSecret(): string | undefined {
 export function googleRedirectUriFromRequest(req: Request): string {
   const env = process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim();
   if (env) return env;
+  const u = new URL(req.url);
+  const origin = u.origin;
   const base = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
   if (base?.startsWith("http")) {
-    return `${base}/api/integrations/google/callback`;
+    try {
+      if (new URL(base).host === u.host) {
+        return `${base}/api/integrations/google/callback`;
+      }
+    } catch {
+      /* fall through */
+    }
   }
-  const u = new URL(req.url);
-  return `${u.origin}/api/integrations/google/callback`;
+  return `${origin}/api/integrations/google/callback`;
 }
