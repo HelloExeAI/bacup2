@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { businessOsForbiddenIfNeeded } from "@/lib/billing/businessOsAccess";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveWorkspaceContext } from "@/lib/workspace/resolveWorkspace";
 
@@ -22,6 +23,8 @@ export async function GET() {
     if (userErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const denied = await businessOsForbiddenIfNeeded(supabase, user.id);
+    if (denied) return denied;
     const ctx = await resolveWorkspaceContext(supabase, user.id);
     const { data, error } = await supabase
       .from("workspace_decisions")
@@ -47,6 +50,8 @@ export async function POST(req: Request) {
     if (userErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const denied = await businessOsForbiddenIfNeeded(supabase, user.id);
+    if (denied) return denied;
     const ctx = await resolveWorkspaceContext(supabase, user.id);
     if (user.id !== ctx.workspaceOwnerId) {
       return NextResponse.json({ error: "Only the workspace owner can add decisions" }, { status: 403 });

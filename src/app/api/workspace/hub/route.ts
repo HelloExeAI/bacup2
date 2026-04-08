@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { businessOsForbiddenIfNeeded } from "@/lib/billing/businessOsAccess";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { fetchDashboardTasksByView } from "@/lib/supabase/queries";
 import { defaultEaPolicy, type EaAccessPolicyRow } from "@/lib/workspace/eaAccess";
@@ -38,6 +39,9 @@ export async function GET() {
     if (userErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const denied = await businessOsForbiddenIfNeeded(supabase, user.id);
+    if (denied) return denied;
 
     const ctx = await resolveWorkspaceContext(supabase, user.id);
     const ws = ctx.workspaceOwnerId;

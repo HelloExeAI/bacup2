@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useAskBacupStore } from "@/store/askBacupStore";
 import { TopbarFlipClock } from "@/components/clock/TopbarFlipClock";
 import { TopbarTimer } from "@/components/clock/TopbarTimer";
+import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
 import { useSettingsModal } from "@/modules/settings/SettingsProvider";
 import { useClockPreferencesStore } from "@/store/clockPreferencesStore";
 import { useUserStore } from "@/store/userStore";
@@ -49,6 +50,126 @@ function SettingsIcon3D() {
         </svg>
       </span>
     </span>
+  );
+}
+
+function isNavActive(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  if (href === "/dashboard") return pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  if (href === "/workspace" || href === "/my-view") return pathname === href;
+  return pathname === href;
+}
+
+function TopbarNavMenuButton() {
+  const pathname = usePathname();
+  const { canUseBusinessOs, ready } = useSubscriptionTier();
+  const navLinks = React.useMemo(() => {
+    const tail = [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/calendar", label: "Calendar" },
+      { href: "/scratchpad", label: "Scratchpad" },
+    ];
+    if (!ready) {
+      return [{ href: "/my-view", label: "My View" }, ...tail];
+    }
+    if (canUseBusinessOs) {
+      return [{ href: "/workspace", label: "Business OS" }, ...tail];
+    }
+    return [{ href: "/my-view", label: "My View" }, ...tail];
+  }, [ready, canUseBusinessOs]);
+  const [open, setOpen] = React.useState(false);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+  const menuId = React.useId();
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-controls={menuId}
+        title="Navigation menu"
+        onClick={() => setOpen((v) => !v)}
+        className="group relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-transparent text-foreground transition-[transform,background-color] hover:bg-muted/60 active:scale-[0.97]"
+      >
+        <span className="sr-only">{open ? "Close menu" : "Open menu"}</span>
+        <span className="flex h-[18px] w-[22px] flex-col items-center justify-center" aria-hidden>
+          <span
+            className={[
+              "block h-0.5 w-[22px] origin-center rounded-full bg-current transition-transform duration-200 ease-out",
+              open ? "translate-y-[7px] rotate-45" : "",
+            ].join(" ")}
+          />
+          <span
+            className={[
+              "my-[5px] block h-0.5 w-[22px] rounded-full bg-current transition-opacity duration-200 ease-out",
+              open ? "opacity-0" : "opacity-100",
+            ].join(" ")}
+          />
+          <span
+            className={[
+              "block h-0.5 w-[22px] origin-center rounded-full bg-current transition-transform duration-200 ease-out",
+              open ? "-translate-y-[7px] -rotate-45" : "",
+            ].join(" ")}
+          />
+        </span>
+      </button>
+
+      <div
+        id={menuId}
+        role="menu"
+        aria-hidden={!open}
+        className={[
+          "absolute right-0 top-full z-[60] mt-2 min-w-[15rem] overflow-hidden rounded-xl border border-border/80 bg-background/98 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.14)] backdrop-blur-md dark:shadow-[0_12px_40px_rgba(0,0,0,0.45)]",
+          "origin-top-right transition-[transform,opacity,visibility] duration-200 ease-out",
+          open ? "visible scale-100 opacity-100" : "invisible scale-95 opacity-0 pointer-events-none",
+        ].join(" ")}
+      >
+        <div className="border-b border-border/50 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Go to</p>
+        </div>
+        <ul className="p-1">
+          {navLinks.map((item) => {
+            const active = isNavActive(pathname, item.href);
+            return (
+              <li key={item.href} role="none">
+                <Link
+                  href={item.href}
+                  role="menuitem"
+                  onClick={() => setOpen(false)}
+                  className={[
+                    "flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-foreground/85 hover:bg-muted/80 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }
 
@@ -111,47 +232,12 @@ export function Topbar() {
     <header className="relative z-40 h-16 border-b border-border/80 bg-background/95 backdrop-blur">
       <div className="relative flex h-full w-full min-w-0 items-center justify-between gap-4 px-4 sm:px-5 lg:px-6">
         <div className="relative z-10 flex min-w-0 shrink-0 items-center gap-3">
-          <Link href="/scratchpad" className="flex min-w-0 items-center gap-2.5">
+          <Link href="/start" className="flex min-w-0 items-center gap-2.5" title="Home">
             <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-sm font-semibold">
               Bc
             </div>
             <div className="text-[15px] font-semibold tracking-wide">Bacup</div>
           </Link>
-          {user ? (
-            <nav
-              className="hidden items-center gap-3 border-l border-border/60 pl-3 text-[12px] font-medium text-muted-foreground md:flex"
-              aria-label="Primary"
-            >
-              <Link
-                href="/workspace"
-                className={pathname === "/workspace" ? "text-foreground" : "hover:text-foreground/90"}
-              >
-                Workspace
-              </Link>
-              <Link
-                href="/dashboard"
-                className={
-                  pathname === "/dashboard" || pathname?.startsWith("/dashboard/")
-                    ? "text-foreground"
-                    : "hover:text-foreground/90"
-                }
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/calendar"
-                className={pathname === "/calendar" ? "text-foreground" : "hover:text-foreground/90"}
-              >
-                Calendar
-              </Link>
-              <Link
-                href="/scratchpad"
-                className={pathname === "/scratchpad" ? "text-foreground" : "hover:text-foreground/90"}
-              >
-                Scratchpad
-              </Link>
-            </nav>
-          ) : null}
         </div>
 
         {user ? (
@@ -168,7 +254,8 @@ export function Topbar() {
           </div>
         ) : null}
 
-        <div className="relative z-10 flex min-w-0 shrink-0 items-center justify-end gap-3">
+        <div className="relative z-10 flex min-w-0 shrink-0 items-center justify-end gap-2 sm:gap-3">
+          {user ? <TopbarNavMenuButton /> : null}
           {user ? <AskBacupMicButton /> : null}
           <ThemeToggle iconOnly variant="topbar" />
           <AppNotificationBell size="topbar" />

@@ -47,7 +47,7 @@ export function MarketingAuthForm({
     if (oauthError) setError(oauthError);
   }, [oauthError]);
 
-  const oauthNextPath = mode === "signup" ? "/onboarding" : "/dashboard";
+  const oauthNextPath = mode === "signup" ? "/onboarding" : "/start";
 
   async function signInWithGoogle() {
     setError(null);
@@ -122,7 +122,7 @@ export function MarketingAuthForm({
       setProfile(profile);
       syncPosthogPerson(data.user, profile);
       posthog.capture("user_logged_in", { email: data.user.email });
-      redirectAfterAuth("/dashboard", router);
+      redirectAfterAuth("/start", router);
     } catch (err) {
       posthog.captureException(err);
       if (err instanceof TypeError && /fetch/i.test(err.message)) {

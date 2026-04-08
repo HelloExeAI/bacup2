@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { canUseBusinessOs } from "@/lib/billing/businessOsAccess";
 import { coerceBacupTierId } from "@/lib/billing/bacupTiers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { WorkspaceHub } from "@/modules/workspace/WorkspaceHub";
 
-export default async function WorkspacePage() {
+/**
+ * Post-auth landing: Executive OS → Business OS (`/workspace`), other tiers → My View (`/my-view`).
+ */
+export default async function StartPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -19,7 +21,5 @@ export default async function WorkspacePage() {
     .maybeSingle();
 
   const tier = coerceBacupTierId(data?.subscription_tier);
-  if (!canUseBusinessOs(tier)) redirect("/my-view");
-
-  return <WorkspaceHub />;
+  redirect(canUseBusinessOs(tier) ? "/workspace" : "/my-view");
 }

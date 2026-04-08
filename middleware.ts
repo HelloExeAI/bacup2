@@ -73,7 +73,7 @@ export async function middleware(req: NextRequest) {
 
   if (session?.user && redirectAuthedAwayFrom(pathname)) {
     const redirectUrl = req.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = "/start";
     return NextResponse.redirect(redirectUrl);
   }
 

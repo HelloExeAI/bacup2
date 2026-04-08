@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const nextRaw = searchParams.get("next") ?? "/dashboard";
-  const next = nextRaw.startsWith("/") ? nextRaw : "/dashboard";
+  const nextRaw = searchParams.get("next") ?? "/start";
+  const next = nextRaw.startsWith("/") ? nextRaw : "/start";
 
   const redirectLogin = (msg?: string) => {
     const u = new URL("/signin", origin);

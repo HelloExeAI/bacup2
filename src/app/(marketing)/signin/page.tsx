@@ -19,7 +19,7 @@ export default async function SignInPage({
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session?.user) redirect("/dashboard");
+  if (session?.user) redirect("/start");
 
   const sp = searchParams ? await searchParams : {};
   return <MarketingAuthForm mode="signin" oauthError={typeof sp.oauth_error === "string" ? sp.oauth_error : undefined} />;

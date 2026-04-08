@@ -15,7 +15,7 @@ export default async function SignUpPage() {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session?.user) redirect("/dashboard");
+  if (session?.user) redirect("/start");
 
   return <MarketingAuthForm mode="signup" />;
 }

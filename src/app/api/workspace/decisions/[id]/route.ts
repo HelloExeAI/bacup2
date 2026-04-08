@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { businessOsForbiddenIfNeeded } from "@/lib/billing/businessOsAccess";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveWorkspaceContext } from "@/lib/workspace/resolveWorkspace";
 
@@ -24,6 +25,8 @@ export async function PATCH(req: Request, segment: { params: Promise<{ id: strin
     if (userErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const denied = await businessOsForbiddenIfNeeded(supabase, user.id);
+    if (denied) return denied;
     const wctx = await resolveWorkspaceContext(supabase, user.id);
     if (user.id !== wctx.workspaceOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -58,6 +61,8 @@ export async function DELETE(_req: Request, segment: { params: Promise<{ id: str
     if (userErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const denied = await businessOsForbiddenIfNeeded(supabase, user.id);
+    if (denied) return denied;
     const wctx = await resolveWorkspaceContext(supabase, user.id);
     if (user.id !== wctx.workspaceOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

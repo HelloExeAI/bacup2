@@ -36,7 +36,7 @@ export function AuthForm({ oauthError }: { oauthError?: string }) {
     try {
       const supabase = createSupabaseBrowserClient();
       const origin = window.location.origin;
-      const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/scratchpad")}`;
+      const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/start")}`;
       const { data, error: oErr } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -96,7 +96,7 @@ export function AuthForm({ oauthError }: { oauthError?: string }) {
           syncPosthogPerson(user, profile);
           posthog.capture("user_signed_up", { email: user.email });
         }
-        router.replace("/scratchpad");
+        router.replace("/start");
         return;
       }
 
@@ -112,7 +112,7 @@ export function AuthForm({ oauthError }: { oauthError?: string }) {
       setProfile(profile);
       syncPosthogPerson(data.user, profile);
       posthog.capture("user_logged_in", { email: data.user.email });
-      router.replace("/scratchpad");
+      router.replace("/start");
     } catch (err) {
       posthog.captureException(err);
       if (err instanceof TypeError && /fetch/i.test(err.message)) {
