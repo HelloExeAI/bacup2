@@ -12,8 +12,21 @@ import { mergePrimaryOAuthIntoProfile, uploadMicrosoftGraphPhotoToAvatar } from 
 
 export const dynamic = "force-dynamic";
 
-function finishRedirect(req: Request, query: Record<string, string>, path = "/scratchpad") {
-  const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || new URL(req.url).origin;
+function finishRedirect(req: Request, query: Record<string, string>, path = "/settings") {
+  const reqUrl = new URL(req.url);
+  const reqOrigin = reqUrl.origin;
+  const env = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") || "";
+  // Keep the user on the same host they initiated OAuth from (preview URLs, apex vs www)
+  // unless NEXT_PUBLIC_APP_URL matches this host exactly.
+  let base = reqOrigin;
+  if (env.startsWith("http")) {
+    try {
+      if (new URL(env).host === reqUrl.host) base = env;
+    } catch {
+      /* ignore */
+    }
+  }
+
   const url = new URL(path, base);
   for (const [k, v] of Object.entries(query)) {
     url.searchParams.set(k, v);
@@ -30,6 +43,7 @@ export async function GET(req: Request) {
     return finishRedirect(req, {
       integrations: "microsoft_error",
       reason: err,
+      ...(errDesc ? { detail: errDesc.slice(0, 180) } : {}),
     });
   }
 
@@ -140,16 +154,19 @@ export async function GET(req: Request) {
       },
     });
 
-    return finishRedirect(req, { integrations: "microsoft_connected" }, "/scratchpad");
+    return finishRedirect(req, { integrations: "microsoft_connected" }, "/settings");
   } catch (e) {
     console.error("[microsoft/oauth/callback]", e);
     let reason = "exchange";
+    let detail: string | undefined;
     if (e instanceof MicrosoftTokenExchangeError) {
       reason = e.oauthError;
+      if (e.oauthDescription) detail = e.oauthDescription.slice(0, 180);
     } else if (e instanceof Error) {
       if (e.message.includes("Failed to load Microsoft profile")) reason = "profile";
       else if (e.message.includes("Microsoft profile missing")) reason = "profile_email";
+      detail = e.message.slice(0, 180);
     }
-    return finishRedirect(req, { integrations: "microsoft_error", reason });
+    return finishRedirect(req, { integrations: "microsoft_error", reason, ...(detail ? { detail } : {}) });
   }
 }

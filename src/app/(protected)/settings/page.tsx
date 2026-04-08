@@ -11,12 +11,18 @@ import { useSettingsModal } from "@/modules/settings/SettingsProvider";
  */
 export default function SettingsPage() {
   const router = useRouter();
-  const { openSettings } = useSettingsModal();
+  const { openSettings, openSettingsToTab } = useSettingsModal();
 
   React.useEffect(() => {
-    openSettings();
+    const sp = new URLSearchParams(window.location.search);
+    const ig = sp.get("integrations")?.trim() ?? "";
+    if (ig.startsWith("microsoft_") || ig.startsWith("google_")) {
+      openSettingsToTab("integrations");
+    } else {
+      openSettings();
+    }
     router.replace("/scratchpad");
-  }, [openSettings, router]);
+  }, [openSettings, openSettingsToTab, router]);
 
   return (
     <div className="p-4 text-sm text-muted-foreground">
