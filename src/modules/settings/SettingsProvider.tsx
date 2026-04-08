@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 
 import { coerceNotificationSoundId } from "@/lib/notifications/notificationSounds";
 import { SettingsModal, type SettingsTabId } from "@/modules/settings/SettingsModal";
@@ -16,6 +17,36 @@ type Ctx = {
 };
 
 const SettingsModalContext = React.createContext<Ctx | null>(null);
+
+/**
+ * OAuth callbacks append ?integrations=… to the URL. The settings modal must open even if the user
+ * lands on /scratchpad (modal was closed); otherwise integration handling never runs and errors look “silent”.
+ */
+function OpenIntegrationsTabOnOAuthReturn() {
+  const searchParams = useSearchParams();
+  const ctx = React.useContext(SettingsModalContext);
+  const openedForKeyRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!ctx) return;
+    const fromUrl =
+      searchParams.get("integrations")?.trim() ||
+      (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("integrations")?.trim() : "") ||
+      "";
+    if (!fromUrl) {
+      openedForKeyRef.current = null;
+      return;
+    }
+    if (!fromUrl.startsWith("microsoft_") && !fromUrl.startsWith("google_")) return;
+    const detail = searchParams.get("detail") || new URLSearchParams(window.location.search).get("detail") || "";
+    const key = `${fromUrl}|${detail}`;
+    if (openedForKeyRef.current === key) return;
+    openedForKeyRef.current = key;
+    ctx.openSettingsToTab("integrations");
+  }, [ctx, searchParams]);
+
+  return null;
+}
 
 function ClientSettingsHydrator() {
   const userId = useUserStore((s) => s.user?.id ?? null);
@@ -70,6 +101,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   return (
     <SettingsModalContext.Provider value={value}>
       <ClientSettingsHydrator />
+      <OpenIntegrationsTabOnOAuthReturn />
       {children}
       <SettingsModal
         open={open}

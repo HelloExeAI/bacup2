@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import posthog from "posthog-js";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -381,16 +382,47 @@ export function SettingsModal({
   React.useEffect(() => {
     if (!open) return;
     void (async () => {
+      const readIntegrationParams = () => {
+        const merged = new URLSearchParams(searchParams.toString());
+        if (typeof window !== "undefined") {
+          const w = new URLSearchParams(window.location.search);
+          w.forEach((v, k) => {
+            if (!merged.has(k)) merged.set(k, v);
+          });
+        }
+        return {
+          ig: merged.get("integrations")?.trim() ?? "",
+          reason: merged.get("reason")?.trim() ?? "",
+          detail: merged.get("detail")?.trim() ?? "",
+        };
+      };
+
       await load();
-      const ig = searchParams.get("integrations")?.trim() ?? "";
+
+      let { ig, reason, detail } = readIntegrationParams();
+      if (!ig && typeof window !== "undefined") {
+        await new Promise<void>((r) => requestAnimationFrame(() => r()));
+        ({ ig, reason, detail } = readIntegrationParams());
+      }
       if (!ig) return;
-      const reason = searchParams.get("reason")?.trim() ?? "";
-      const detail = searchParams.get("detail")?.trim() ?? "";
+
       const dedupe = `${ig}|${reason}|${detail}`;
       if (integrationReturnKeyRef.current === dedupe) return;
       integrationReturnKeyRef.current = dedupe;
 
-      if (ig === "microsoft_connected" || ig === "google_connected") {
+      const isOk = ig === "microsoft_connected" || ig === "google_connected";
+      try {
+        posthog.capture("integration_oauth_return", {
+          provider: ig.startsWith("microsoft") ? "microsoft" : "google",
+          status: isOk ? "success" : "error",
+          reason: reason || undefined,
+          has_detail: Boolean(detail),
+        });
+      } catch {
+        /* optional analytics */
+      }
+
+      if (isOk) {
         flashSaveNotice(ig.startsWith("microsoft") ? "Microsoft account connected." : "Google account connected.");
       } else if (ig === "microsoft_error" || ig === "google_error") {
         let msg = "Could not connect.";
