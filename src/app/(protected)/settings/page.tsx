@@ -21,7 +21,11 @@ export default function SettingsPage() {
     } else {
       openSettings();
     }
-    router.replace("/scratchpad");
+    // Keep ?integrations=…&reason=… on /scratchpad so Settings can reload accounts and show success/error.
+    const q = window.location.search;
+    window.setTimeout(() => {
+      router.replace(q ? `/scratchpad${q}` : "/scratchpad");
+    }, 0);
   }, [openSettings, openSettingsToTab, router]);
 
   return (

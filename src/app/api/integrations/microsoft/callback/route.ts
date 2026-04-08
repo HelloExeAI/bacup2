@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getTrustedDbClient } from "@/lib/supabase/service";
 import { microsoftRedirectUriFromRequest } from "@/lib/integrations/microsoft/microsoftEnv";
 import {
   exchangeMicrosoftAuthorizationCode,
@@ -74,15 +75,19 @@ export async function GET(req: Request) {
     const redirectUri = microsoftRedirectUriFromRequest(req);
     const tokens = await exchangeMicrosoftAuthorizationCode(code, redirectUri);
     const profile = await fetchMicrosoftUserProfile(tokens.access_token);
+    const accountEmail = profile.email.trim().toLowerCase();
 
     const expiresAt = new Date(Date.now() + Math.max(60, tokens.expires_in) * 1000).toISOString();
 
-    const { data: existing } = await supabase
+    /** Prefer service role for token rows so RLS/cookie edge cases cannot block writes after a valid OAuth code. */
+    const db = getTrustedDbClient(supabase);
+
+    const { data: existing } = await db
       .from("user_connected_accounts")
       .select("id, refresh_token")
       .eq("user_id", user.id)
       .eq("provider", "microsoft")
-      .eq("account_email", profile.email)
+      .eq("account_email", accountEmail)
       .maybeSingle();
 
     const refreshToken = tokens.refresh_token ?? (existing as { refresh_token?: string } | null)?.refresh_token ?? null;
@@ -90,7 +95,7 @@ export async function GET(req: Request) {
     const row = {
       user_id: user.id,
       provider: "microsoft" as const,
-      account_email: profile.email,
+      account_email: accountEmail,
       provider_subject: profile.id,
       access_token: tokens.access_token,
       refresh_token: refreshToken,
@@ -99,7 +104,7 @@ export async function GET(req: Request) {
     };
 
     if (existing?.id) {
-      const { error: upErr } = await supabase
+      const { error: upErr } = await db
         .from("user_connected_accounts")
         .update({
           provider_subject: row.provider_subject,
@@ -113,10 +118,10 @@ export async function GET(req: Request) {
 
       if (upErr) throw upErr;
     } else {
-      const { error: insErr } = await supabase.from("user_connected_accounts").insert(row);
+      const { error: insErr } = await db.from("user_connected_accounts").insert(row);
       if (insErr) {
         if (insErr.code === "23505") {
-          const { error: upErr2 } = await supabase
+          const { error: upErr2 } = await db
             .from("user_connected_accounts")
             .update({
               provider_subject: row.provider_subject,
@@ -127,7 +132,7 @@ export async function GET(req: Request) {
             })
             .eq("user_id", user.id)
             .eq("provider", "microsoft")
-            .eq("account_email", profile.email);
+            .eq("account_email", accountEmail);
           if (upErr2) throw upErr2;
         } else {
           throw insErr;
@@ -145,7 +150,7 @@ export async function GET(req: Request) {
     await mergePrimaryOAuthIntoProfile(supabase, {
       userId: user.id,
       authEmail: user.email,
-      oauthEmail: profile.email,
+      oauthEmail: accountEmail,
       patch: {
         first_name: profile.givenName,
         last_name: profile.surname,

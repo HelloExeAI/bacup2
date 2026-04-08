@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 import { Button } from "@/components/ui/button";
@@ -179,6 +179,8 @@ export function SettingsModal({
   initialTab?: SettingsTabId | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const integrationReturnKeyRef = React.useRef<string | null>(null);
   const [tab, setTab] = React.useState<TabId>("account");
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -375,10 +377,38 @@ export function SettingsModal({
     }
   }, [applyPayloadToForm, loadViaSupabaseFallback, syncUserStoreFromPayload]);
 
+  /** Load settings; if returning from OAuth (?integrations=…), show result and strip query params. */
   React.useEffect(() => {
     if (!open) return;
-    void load();
-  }, [open, load]);
+    void (async () => {
+      await load();
+      const ig = searchParams.get("integrations")?.trim() ?? "";
+      if (!ig) return;
+      const reason = searchParams.get("reason")?.trim() ?? "";
+      const detail = searchParams.get("detail")?.trim() ?? "";
+      const dedupe = `${ig}|${reason}|${detail}`;
+      if (integrationReturnKeyRef.current === dedupe) return;
+      integrationReturnKeyRef.current = dedupe;
+
+      if (ig === "microsoft_connected" || ig === "google_connected") {
+        flashSaveNotice(ig.startsWith("microsoft") ? "Microsoft account connected." : "Google account connected.");
+      } else if (ig === "microsoft_error" || ig === "google_error") {
+        let msg = "Could not connect.";
+        if (detail) {
+          try {
+            msg = decodeURIComponent(detail.replace(/\+/g, " "));
+          } catch {
+            msg = detail;
+          }
+        } else if (reason) {
+          msg = `Error: ${reason}`;
+        }
+        setError(msg);
+      }
+      const path = typeof window !== "undefined" ? window.location.pathname : "/scratchpad";
+      router.replace(path, { scroll: false });
+    })();
+  }, [open, load, searchParams, flashSaveNotice, router]);
 
   React.useEffect(() => {
     if (!open) return;
