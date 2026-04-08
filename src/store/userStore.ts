@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { User } from "@supabase/supabase-js";
 
-export type ProfileRole = "founder" | "ea" | "member";
+export type ProfileRole = "founder" | "ea" | "manager" | "associate" | "member";
 
 export type Profile = {
   id: string;

@@ -110,12 +110,49 @@ export function Topbar() {
   return (
     <header className="relative z-40 h-16 border-b border-border/80 bg-background/95 backdrop-blur">
       <div className="relative flex h-full w-full min-w-0 items-center justify-between gap-4 px-4 sm:px-5 lg:px-6">
-        <Link href="/scratchpad" className="relative z-10 flex min-w-0 shrink-0 items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-sm font-semibold">
-            Bc
-          </div>
-          <div className="text-[15px] font-semibold tracking-wide">Bacup</div>
-        </Link>
+        <div className="relative z-10 flex min-w-0 shrink-0 items-center gap-3">
+          <Link href="/scratchpad" className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-sm font-semibold">
+              Bc
+            </div>
+            <div className="text-[15px] font-semibold tracking-wide">Bacup</div>
+          </Link>
+          {user ? (
+            <nav
+              className="hidden items-center gap-3 border-l border-border/60 pl-3 text-[12px] font-medium text-muted-foreground md:flex"
+              aria-label="Primary"
+            >
+              <Link
+                href="/workspace"
+                className={pathname === "/workspace" ? "text-foreground" : "hover:text-foreground/90"}
+              >
+                Workspace
+              </Link>
+              <Link
+                href="/dashboard"
+                className={
+                  pathname === "/dashboard" || pathname?.startsWith("/dashboard/")
+                    ? "text-foreground"
+                    : "hover:text-foreground/90"
+                }
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/calendar"
+                className={pathname === "/calendar" ? "text-foreground" : "hover:text-foreground/90"}
+              >
+                Calendar
+              </Link>
+              <Link
+                href="/scratchpad"
+                className={pathname === "/scratchpad" ? "text-foreground" : "hover:text-foreground/90"}
+              >
+                Scratchpad
+              </Link>
+            </nav>
+          ) : null}
+        </div>
 
         {user ? (
           <div
