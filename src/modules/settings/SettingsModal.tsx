@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import posthog from "posthog-js";
@@ -182,6 +183,7 @@ export function SettingsModal({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const profileRole = useUserStore((s) => s.profile?.role);
   const integrationReturnKeyRef = React.useRef<string | null>(null);
   const [tab, setTab] = React.useState<TabId>("account");
   const [loading, setLoading] = React.useState(false);
@@ -866,37 +868,97 @@ export function SettingsModal({
                 </Button>
               </div>
             ) : tab === "security" ? (
-              <div className="space-y-4">
-                <p className="text-[13px] text-muted-foreground">
-                  Choose a strong password you do not use on other sites.
-                </p>
-                <Field label="New password">
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input
-                      type="password"
-                      autoComplete="new-password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="New password"
-                    />
-                    <Input
-                      type="password"
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm new password"
-                    />
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <p className="text-[13px] text-muted-foreground">
+                    Choose a strong password you do not use on other sites.
+                  </p>
+                  <Field label="New password">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="New password"
+                      />
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm new password"
+                      />
+                    </div>
+                  </Field>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="border border-border"
+                    disabled={saving}
+                    onClick={() => void changePassword()}
+                  >
+                    Update password
+                  </Button>
+                </div>
+
+                <div className="space-y-3 border-t border-[#E0DDD6] pt-6 dark:border-[hsl(35_10%_28%)]">
+                  <div className="text-sm font-semibold text-foreground">Security center</div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Connected accounts, what integrations can access, retention posture, and EA visibility—so you know
+                    what leaves your device and what stays server-side.
+                  </p>
+                  <div className="rounded-lg border border-[#E0DDD6] bg-white/50 px-3 py-2 text-[11px] dark:border-[hsl(35_10%_28%)] dark:bg-black/20">
+                    <div className="font-medium text-foreground">Email &amp; calendar data</div>
+                    <p className="mt-1 text-muted-foreground">
+                      Inbox uses a today-only fetch; message bodies are not stored in Bacup. Subject lines may appear as
+                      task titles. Historical mail is reached via provider search, not day-by-day browsing in our DB.
+                    </p>
                   </div>
-                </Field>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="border border-border"
-                  disabled={saving}
-                  onClick={() => void changePassword()}
-                >
-                  Update password
-                </Button>
+                  <div className="rounded-lg border border-[#E0DDD6] bg-white/50 px-3 py-2 text-[11px] dark:border-[hsl(35_10%_28%)] dark:bg-black/20">
+                    <div className="font-medium text-foreground">Connected accounts ({connected.length})</div>
+                    {connected.length === 0 ? (
+                      <p className="mt-1 text-muted-foreground">None linked yet.</p>
+                    ) : (
+                      <ul className="mt-2 space-y-1">
+                        {connected.map((a: ConnectedAccountRow) => (
+                          <li key={a.id} className="flex flex-wrap justify-between gap-2">
+                            <span className="text-foreground">{a.account_email}</span>
+                            <span className="text-muted-foreground">{a.provider}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-3 border border-border"
+                      onClick={() => setTab("integrations")}
+                    >
+                      Manage integrations
+                    </Button>
+                  </div>
+                  {profileRole === "founder" ? (
+                    <div className="rounded-lg border border-[#E0DDD6] bg-white/50 px-3 py-2 text-[11px] dark:border-[hsl(35_10%_28%)] dark:bg-black/20">
+                      <div className="font-medium text-foreground">EA access</div>
+                      <p className="mt-1 text-muted-foreground">
+                        Delegate visibility (email-derived tasks, calendar summary, decisions, projects) from Business OS
+                        → EA delegation.
+                      </p>
+                      <Link
+                        href="/workspace"
+                        className="mt-2 inline-flex text-xs font-medium text-foreground underline underline-offset-2"
+                      >
+                        Open workspace &amp; EA policies
+                      </Link>
+                    </div>
+                  ) : null}
+                  <p className="text-[10px] text-muted-foreground">
+                    Account deletion and full data export are handled on request through support—tell us if you need a
+                    machine-readable export bundle.
+                  </p>
+                </div>
               </div>
             ) : tab === "ai" ? (
               <div className="space-y-4">

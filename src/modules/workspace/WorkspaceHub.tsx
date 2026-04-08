@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUserStore } from "@/store/userStore";
 import type { SettingsPayload, TeamMemberSummary } from "@/modules/settings/types";
+import { WorkspaceOsV2, type WorkspaceV2Bundle } from "@/modules/workspace/WorkspaceOsV2";
 
 type HubContext = {
   workspaceOwnerId: string;
@@ -101,6 +102,13 @@ export function WorkspaceHub() {
   const [recognitions, setRecognitions] = React.useState<RecRow[]>([]);
   const [orgEdges, setOrgEdges] = React.useState<OrgEdge[]>([]);
   const [team, setTeam] = React.useState<TeamMemberSummary[]>([]);
+  const [v2Bundle, setV2Bundle] = React.useState<WorkspaceV2Bundle>({
+    playbookTemplates: [],
+    playbookRuns: [],
+    dependencies: [],
+    meetings: [],
+  });
+
   const [eaPolicies, setEaPolicies] = React.useState<
     Array<{
       ea_user_id: string;
@@ -133,6 +141,23 @@ export function WorkspaceHub() {
       setValues((hubJson?.companyValues as ValueRow[]) ?? []);
       setRecognitions((hubJson?.recognitions as RecRow[]) ?? []);
       setOrgEdges((hubJson?.orgEdges as OrgEdge[]) ?? []);
+
+      const rawV2 = hubJson?.v2 as WorkspaceV2Bundle | undefined;
+      if (rawV2 && typeof rawV2 === "object") {
+        setV2Bundle({
+          playbookTemplates: Array.isArray(rawV2.playbookTemplates) ? rawV2.playbookTemplates : [],
+          playbookRuns: Array.isArray(rawV2.playbookRuns) ? rawV2.playbookRuns : [],
+          dependencies: Array.isArray(rawV2.dependencies) ? rawV2.dependencies : [],
+          meetings: Array.isArray(rawV2.meetings) ? rawV2.meetings : [],
+        });
+      } else {
+        setV2Bundle({
+          playbookTemplates: [],
+          playbookRuns: [],
+          dependencies: [],
+          meetings: [],
+        });
+      }
 
       const settingsJson = (await settingsRes.json().catch(() => null)) as SettingsPayload | null;
       if (settingsRes.ok && settingsJson?.teamMembers) {
@@ -340,8 +365,8 @@ export function WorkspaceHub() {
         </p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Business OS</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Morning brief, decisions, and project health in one place. V2 will add playbooks, dependency maps, and a
-          security center.
+          Morning brief, decisions, project health, programs &amp; playbooks, cross-team dependencies, and meeting OS.
+          Security &amp; data controls live in Settings → Security.
         </p>
         {emailNote ? (
           <p className="mt-2 max-w-3xl rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
@@ -506,6 +531,13 @@ export function WorkspaceHub() {
           ) : null}
         </section>
       </div>
+
+      <WorkspaceOsV2
+        isFounder={isFounder}
+        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        v2={v2Bundle}
+        reload={reload}
+      />
 
       {isFounder ? (
         <section className="grid gap-8 lg:grid-cols-2">

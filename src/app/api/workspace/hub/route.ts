@@ -108,6 +108,94 @@ export async function GET() {
         ? (decisionsRes.data as { status: string }[]).filter((d) => d.status === "pending").length
         : 0;
 
+    /** V2: playbooks, dependency map, meeting OS (tables from workspace_v2 migration). */
+    let v2: {
+      playbookTemplates: Array<Record<string, unknown>>;
+      playbookRuns: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+      meetings: Array<Record<string, unknown>>;
+    } = {
+      playbookTemplates: [],
+      playbookRuns: [],
+      dependencies: [],
+      meetings: [],
+    };
+
+    try {
+      const [tplRes, runRes, depRes, meetRes] = await Promise.all([
+        supabase
+          .from("workspace_playbook_templates")
+          .select("id,name,description,cadence_label,created_at")
+          .eq("workspace_owner_id", ws)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("workspace_playbook_runs")
+          .select("id,template_id,status,started_at,completed_at,started_by")
+          .eq("workspace_owner_id", ws)
+          .order("started_at", { ascending: false })
+          .limit(25),
+        supabase
+          .from("workspace_cross_team_dependencies")
+          .select("id,waiting_on_label,blocked_party_label,project_id,status,notes,created_at,updated_at")
+          .eq("workspace_owner_id", ws)
+          .order("updated_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("workspace_meetings")
+          .select(
+            "id,title,scheduled_at,calendar_event_id,phase,before_agenda,before_decisions_needed,after_decisions_summary,after_action_items,created_at,completed_at",
+          )
+          .eq("workspace_owner_id", ws)
+          .order("created_at", { ascending: false })
+          .limit(40),
+      ]);
+
+      const tplErr = tplRes.error || runRes.error || depRes.error || meetRes.error;
+      if (tplErr) {
+        console.warn("[workspace/hub] v2 bundle skipped:", tplErr.message);
+      } else {
+        const templates = tplRes.data ?? [];
+        const tids = templates.map((t) => t.id as string);
+        let stepsByTid = new Map<string, unknown[]>();
+        if (tids.length > 0) {
+          const { data: steps, error: stErr } = await supabase
+            .from("workspace_playbook_template_steps")
+            .select("id,template_id,sort_order,title,detail")
+            .in("template_id", tids)
+            .order("sort_order", { ascending: true });
+          if (!stErr && steps) {
+            stepsByTid = steps.reduce((m, s) => {
+              const tid = s.template_id as string;
+              const arr = m.get(tid) ?? [];
+              arr.push(s);
+              m.set(tid, arr);
+              return m;
+            }, new Map<string, unknown[]>());
+          }
+        }
+
+        const nameByTid = Object.fromEntries(templates.map((t) => [t.id as string, t.name as string]));
+        const playbookTemplates = templates.map((t) => ({
+          ...t,
+          steps: stepsByTid.get(t.id as string) ?? [],
+        }));
+
+        const runs = (runRes.data ?? []).map((r) => ({
+          ...r,
+          template_name: nameByTid[r.template_id as string] ?? "Playbook",
+        }));
+
+        v2 = {
+          playbookTemplates,
+          playbookRuns: runs,
+          dependencies: depRes.data ?? [],
+          meetings: meetRes.data ?? [],
+        };
+      }
+    } catch (e) {
+      console.warn("[workspace/hub] v2 bundle error", e);
+    }
+
     return NextResponse.json({
       context: {
         workspaceOwnerId: ws,
@@ -127,6 +215,7 @@ export async function GET() {
       companyValues: valuesRes.data ?? [],
       recognitions: hideRecognition ? [] : recRes.data ?? [],
       orgEdges: orgRes.data ?? [],
+      v2,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "hub_failed";

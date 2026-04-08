@@ -8,7 +8,7 @@ Authoritative narrative for **V1 / V2 / V3+** and feature themes. Read this when
 
 **V1:** Morning brief + decision queue + project cards + role homes + delegation for EA + strict email policy (as defined in product).
 
-**V2:** Playbooks / recurring programs, dependency map, meeting OS, security center.
+**V2:** Playbooks / recurring programs, dependency map, meeting OS, security center. *(Shipped in-app: Business OS workspace + Settings → Security; see migration `20260410120000_workspace_v2_playbooks_dependencies_meetings.sql`.)*
 
 **V3+:** Deep stakeholder / investor rhythms, advanced workload SLAs, richer WhatsApp.
 
