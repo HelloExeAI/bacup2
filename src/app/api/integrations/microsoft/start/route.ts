@@ -42,6 +42,8 @@ export async function GET(req: Request) {
     url.searchParams.set("scope", [...MICROSOFT_OAUTH_SCOPES].join(" "));
     url.searchParams.set("state", state);
     url.searchParams.set("response_mode", "query");
+    // Force account picker instead of silently using an existing browser session.
+    url.searchParams.set("prompt", "select_account");
 
     return NextResponse.redirect(url.toString());
   } catch (e) {
