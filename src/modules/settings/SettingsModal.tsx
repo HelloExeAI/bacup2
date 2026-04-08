@@ -230,6 +230,7 @@ export function SettingsModal({
   const [confirmPassword, setConfirmPassword] = React.useState("");
 
   const [settings, setSettings] = React.useState<UserSettingsRow | null>(null);
+  const [imapModalOpen, setImapModalOpen] = React.useState(false);
 
   const applyPayloadToForm = React.useCallback((p: SettingsPayload) => {
     setPayload(p);
@@ -664,7 +665,6 @@ export function SettingsModal({
   const connected = payload?.connectedAccounts ?? [];
   const googleAccounts = connected.filter((a: ConnectedAccountRow) => a.provider === "google");
   const imapAccounts = connected.filter((a: ConnectedAccountRow) => a.provider === "imap");
-  const [imapModalOpen, setImapModalOpen] = React.useState(false);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:p-4">
