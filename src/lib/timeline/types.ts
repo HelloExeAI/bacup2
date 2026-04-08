@@ -1,4 +1,4 @@
-export type TimelineSource = "google" | "outlook" | "task" | "milestone";
+export type TimelineSource = "google" | "outlook" | "imap" | "task" | "milestone";
 
 export type TimelineAttendee = {
   initials: string;
@@ -33,5 +33,6 @@ export type TimelineTodayResult = {
   connected: {
     google: boolean;
     outlook: boolean;
+    imap: boolean;
   };
 };

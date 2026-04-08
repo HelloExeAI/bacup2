@@ -1,7 +1,7 @@
 import type { TimelineItem } from "@/lib/timeline/types";
 import { ymdToday } from "@/modules/tasks/dayBriefing";
 
-export type TodayTimelineConnected = { google: boolean; outlook: boolean };
+export type TodayTimelineConnected = { google: boolean; outlook: boolean; imap: boolean };
 export type TodayTimelineClientResponse = {
   items: TimelineItem[];
   connected: TodayTimelineConnected;
@@ -62,10 +62,11 @@ export async function fetchTodayTimelineCached(opts?: { force?: boolean; ttlMs?:
     }
 
     const list = Array.isArray(j?.items) ? (j?.items as TimelineItem[]) : [];
-    const conn = (j?.connected as { google?: boolean; outlook?: boolean } | undefined) ?? undefined;
+    const conn = (j?.connected as { google?: boolean; outlook?: boolean; imap?: boolean } | undefined) ?? undefined;
     const connected: TodayTimelineConnected = {
       google: Boolean(conn?.google),
       outlook: Boolean(conn?.outlook),
+      imap: Boolean(conn?.imap),
     };
 
     const data: TodayTimelineClientResponse = { items: list, connected };

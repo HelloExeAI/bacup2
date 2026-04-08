@@ -22,6 +22,7 @@ import { BillingPage } from "@/modules/settings/billing/BillingPage";
 import { LocationTimezoneSection } from "@/modules/settings/LocationTimezoneSection";
 import { ProfileAvatarEditor } from "@/modules/settings/ProfileAvatarEditor";
 import type { ConnectedAccountRow, SettingsPayload, UserSettingsRow } from "@/modules/settings/types";
+import { ImapConnectModal } from "@/modules/settings/ImapConnectModal";
 import { useClockPreferencesStore } from "@/store/clockPreferencesStore";
 import { useNotificationSoundStore } from "@/store/notificationSoundStore";
 import { syncPosthogPerson } from "@/lib/posthog-person";
@@ -662,10 +663,18 @@ export function SettingsModal({
 
   const connected = payload?.connectedAccounts ?? [];
   const googleAccounts = connected.filter((a: ConnectedAccountRow) => a.provider === "google");
-  const msAccounts = connected.filter((a: ConnectedAccountRow) => a.provider === "microsoft");
+  const imapAccounts = connected.filter((a: ConnectedAccountRow) => a.provider === "imap");
+  const [imapModalOpen, setImapModalOpen] = React.useState(false);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:p-4">
+      <ImapConnectModal
+        open={imapModalOpen}
+        onClose={() => setImapModalOpen(false)}
+        onConnected={async () => {
+          await load();
+        }}
+      />
       <button type="button" aria-label="Close settings" className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
         role="dialog"
@@ -1128,10 +1137,22 @@ export function SettingsModal({
                 <div>
                   <div className="mb-2 text-sm font-semibold text-foreground">Microsoft</div>
                   <p className="mb-2 text-[11px] text-muted-foreground">
-                    Connect Microsoft 365 to sync mail and calendar. Multiple accounts supported.
+                    Microsoft 365 OAuth integration is coming soon. You will be able to sync Outlook mail and calendar
+                    here.
+                  </p>
+                  <div className="inline-flex h-9 cursor-not-allowed items-center justify-center rounded-md border border-dashed border-[#E0DDD6] bg-white/40 px-3 text-sm font-medium text-muted-foreground dark:border-[hsl(35_10%_28%)] dark:bg-black/15">
+                    Coming soon
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-sm font-semibold text-foreground">Other email (IMAP)</div>
+                  <p className="mb-2 text-[11px] text-muted-foreground">
+                    Connect any provider that supports IMAP (and optionally CalDAV for calendar). Credentials are
+                    encrypted on the server.
                   </p>
                   <div className="space-y-2">
-                    {msAccounts.map((a: ConnectedAccountRow) => (
+                    {imapAccounts.map((a: ConnectedAccountRow) => (
                       <div
                         key={a.id}
                         className="rounded-md border border-[#E0DDD6] bg-white/60 px-3 py-2 text-xs dark:border-[hsl(35_10%_28%)] dark:bg-black/20"
@@ -1155,13 +1176,14 @@ export function SettingsModal({
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <a
-                      href="/api/integrations/microsoft/start"
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setImapModalOpen(true)}
                       className="inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-foreground px-3 text-sm font-medium text-background transition-opacity hover:opacity-90"
                     >
-                      Connect with Microsoft
-                    </a>
+                      Connect email
+                    </button>
                   </div>
                 </div>
               </div>

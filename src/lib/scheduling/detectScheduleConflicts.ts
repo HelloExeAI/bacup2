@@ -3,7 +3,7 @@ import type { Task } from "@/store/taskStore";
 import type { TimelineItem } from "@/lib/timeline/types";
 
 export type ConflictReason = {
-  kind: "local_event" | "google" | "outlook";
+  kind: "local_event" | "google" | "outlook" | "imap";
   title: string;
   sourceLabel: string;
 };
@@ -71,7 +71,7 @@ export function detectScheduleConflicts(
 
     if (timelineItems && timelineItems.length > 0) {
       for (const it of timelineItems) {
-        if (it.source !== "google" && it.source !== "outlook") continue;
+        if (it.source !== "google" && it.source !== "outlook" && it.source !== "imap") continue;
         // If the user created a local task from this calendar item, ignore the original
         // Google/Outlook item for conflict detection (prevents self-conflicts).
         if (isTimelineItemTracked(tasks, it.key)) continue;
@@ -80,7 +80,12 @@ export function detectScheduleConflicts(
           reasons.push({
             kind: it.source,
             title: it.title,
-            sourceLabel: it.source === "google" ? "Google Calendar" : "Outlook",
+            sourceLabel:
+              it.source === "google"
+                ? "Google Calendar"
+                : it.source === "imap"
+                  ? "Connected email (CalDAV)"
+                  : "Outlook",
           });
         }
       }

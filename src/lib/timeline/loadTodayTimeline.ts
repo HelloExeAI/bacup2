@@ -5,6 +5,8 @@ import { getValidGoogleAccessToken, GoogleIntegrationError } from "@/lib/integra
 import { getValidMicrosoftAccessToken, MicrosoftIntegrationError } from "@/lib/integrations/microsoft/microsoftAccessToken";
 import { fetchGoogleTimelineEvents } from "@/lib/timeline/googleCalendarFetch";
 import { fetchMicrosoftTimelineEvents } from "@/lib/timeline/microsoftCalendarFetch";
+import { getDecryptedImapSession } from "@/lib/integrations/imap/imapConfig";
+import { fetchCalDavEventsForSession } from "@/lib/integrations/imap/caldavEvents";
 import { eventLocalYmd } from "@/lib/timeline/eventLocalYmd";
 import { timelineSortKey } from "@/lib/timeline/sortTimestamp";
 import type { TimelineItem, TimelineTodayResult } from "@/lib/timeline/types";
@@ -31,6 +33,7 @@ export async function loadTodayTimeline(
   const items: TimelineItem[] = [];
   let googleConnected = false;
   let outlookConnected = false;
+  let imapConnected = false;
 
   const { data: googleAccountRows, error: googleListErr } = await supabase
     .from("user_connected_accounts")
@@ -106,6 +109,42 @@ export async function loadTodayTimeline(
     }
   }
 
+  const { data: imapAccountRows, error: imapListErr } = await supabase
+    .from("user_connected_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("provider", "imap")
+    .order("created_at", { ascending: true });
+
+  if (!imapListErr && imapAccountRows?.length) {
+    imapConnected = true;
+    for (const acc of imapAccountRows as { id: string }[]) {
+      try {
+        const session = await getDecryptedImapSession(supabase, userId, acc.id);
+        if (!session.caldavUrl?.trim()) continue;
+        const raw = await fetchCalDavEventsForSession(session, timeMin, timeMax);
+        for (const ev of raw) {
+          if (eventLocalYmd(ev.start) !== day) continue;
+          items.push({
+            key: `imap:${acc.id}:${ev.id}:${ev.start ?? ""}`,
+            source: "imap",
+            title: ev.summary,
+            start: ev.start,
+            end: ev.end,
+            htmlLink: ev.htmlLink,
+            attendees: [],
+            description: null,
+            location: ev.location,
+            timeZone: null,
+            meetingLinks: [],
+          });
+        }
+      } catch (e) {
+        console.warn("[timeline] imap account", acc.id, e);
+      }
+    }
+  }
+
   const { data: taskRows, error: taskErr } = await supabase
     .from("tasks")
     .select("*")
@@ -168,6 +207,6 @@ export async function loadTodayTimeline(
 
   return {
     items,
-    connected: { google: googleConnected, outlook: outlookConnected },
+    connected: { google: googleConnected, outlook: outlookConnected, imap: imapConnected },
   };
 }

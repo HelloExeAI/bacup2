@@ -38,7 +38,7 @@ export type UserSettingsRow = {
 export type ConnectedAccountRow = {
   id: string;
   user_id: string;
-  provider: "google" | "microsoft";
+  provider: "google" | "microsoft" | "imap";
   account_email: string;
   /** User-defined label in Settings → Integrations; UI falls back to account_email when empty. */
   display_name?: string | null;

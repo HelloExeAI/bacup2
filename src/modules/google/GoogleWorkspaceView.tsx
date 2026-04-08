@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import type { ConnectedAccountRow } from "@/modules/settings/types";
+
 type GmailRow = {
   id: string;
   threadId?: string;
@@ -11,6 +13,8 @@ type GmailRow = {
   date: string;
   snippet: string;
   error?: boolean;
+  source: "google" | "imap";
+  accountEmail: string;
 };
 
 type CalendarRow = {
@@ -20,9 +24,20 @@ type CalendarRow = {
   location: string | null;
   start: string | null;
   end: string | null;
+  source: "google" | "imap";
+  accountEmail: string;
 };
 
 function ymdLocal(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function messageLocalYmd(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -42,6 +57,12 @@ function formatWhen(iso: string | null): string {
   });
 }
 
+function calWindowParams() {
+  const timeMin = new Date().toISOString();
+  const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  return { timeMin, timeMax };
+}
+
 export function GoogleWorkspaceView() {
   const [mailLoading, setMailLoading] = useState(true);
   const [calLoading, setCalLoading] = useState(true);
@@ -56,46 +77,138 @@ export function GoogleWorkspaceView() {
     setMailErr(null);
     setCalErr(null);
 
-    const mailQs = new URLSearchParams({
-      maxResults: "12",
-      date: ymdLocal(),
-    });
-    const [mailRes, calRes] = await Promise.all([
-      fetch(`/api/integrations/google/gmail?${mailQs}`, { credentials: "include" }),
-      fetch("/api/integrations/google/calendar-events?maxResults=25", { credentials: "include" }),
-    ]);
+    const accRes = await fetch("/api/user/connected-accounts", { credentials: "include" });
+    const accJson = (await accRes.json().catch(() => null)) as { accounts?: ConnectedAccountRow[] } | null;
+    const accounts = accRes.ok && Array.isArray(accJson?.accounts) ? accJson!.accounts! : [];
 
-    const mailJson = (await mailRes.json().catch(() => null)) as Record<string, unknown> | null;
-    const calJson = (await calRes.json().catch(() => null)) as Record<string, unknown> | null;
+    const googleIds = accounts.filter((a) => a.provider === "google").map((a) => a.id);
+    const imapList = accounts.filter((a) => a.provider === "imap");
+    const day = ymdLocal();
+    const { timeMin, timeMax } = calWindowParams();
 
-    if (!mailRes.ok) {
-      if (mailRes.status === 404) {
-        setMailErr("not_connected");
-      } else if (mailJson && typeof mailJson.message === "string") {
-        setMailErr(mailJson.message);
-      } else {
-        setMailErr("Could not load Gmail.");
-      }
+    const mergedMail: GmailRow[] = [];
+    const mergedCal: CalendarRow[] = [];
+
+    if (googleIds.length === 0 && imapList.length === 0) {
+      setMailErr("not_connected");
+      setCalErr("not_connected");
       setMessages([]);
-    } else {
-      const list = Array.isArray(mailJson?.messages) ? (mailJson.messages as GmailRow[]) : [];
-      setMessages(list);
+      setEvents([]);
+      setMailLoading(false);
+      setCalLoading(false);
+      return;
     }
+
+    let mailHadError = false;
+    let calHadError = false;
+
+    for (const gid of googleIds) {
+      const mailQs = new URLSearchParams({ maxResults: "12", date: day, accountId: gid });
+      const mailRes = await fetch(`/api/integrations/google/gmail?${mailQs}`, { credentials: "include" });
+      const mailJson = (await mailRes.json().catch(() => null)) as Record<string, unknown> | null;
+      const accEmail = accounts.find((a) => a.id === gid)?.account_email ?? "";
+      if (!mailRes.ok) {
+        if (mailRes.status !== 404) mailHadError = true;
+        continue;
+      }
+      const list = Array.isArray(mailJson?.messages) ? (mailJson!.messages as Omit<GmailRow, "source" | "accountEmail">[]) : [];
+      for (const m of list) {
+        mergedMail.push({
+          ...m,
+          source: "google",
+          accountEmail: accEmail,
+        });
+      }
+    }
+
+    for (const acc of imapList) {
+      const q = new URLSearchParams({ accountId: acc.id, maxResults: "80" });
+      const mailRes = await fetch(`/api/integrations/imap/messages?${q}`, { credentials: "include" });
+      const mailJson = (await mailRes.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!mailRes.ok) {
+        mailHadError = true;
+        continue;
+      }
+      const raw = Array.isArray(mailJson?.messages) ? mailJson!.messages : [];
+      for (const m of raw as { id: string; subject: string; from: string; date: string; snippet: string; accountEmail?: string }[]) {
+        if (messageLocalYmd(m.date) !== day) continue;
+        mergedMail.push({
+          id: `imap:${acc.id}:${m.id}`,
+          subject: m.subject,
+          from: m.from,
+          date: m.date,
+          snippet: m.snippet ?? "",
+          source: "imap",
+          accountEmail: m.accountEmail || acc.account_email,
+        });
+      }
+    }
+
+    mergedMail.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    if (mergedMail.length === 0 && mailHadError) {
+      setMailErr("Could not load mail from one or more accounts.");
+    } else {
+      setMailErr(null);
+    }
+    setMessages(mergedMail);
     setMailLoading(false);
 
-    if (!calRes.ok) {
-      if (calRes.status === 404) {
-        setCalErr("not_connected");
-      } else if (calJson && typeof calJson.message === "string") {
-        setCalErr(calJson.message);
-      } else {
-        setCalErr("Could not load Calendar.");
+    for (const gid of googleIds) {
+      const calQs = new URLSearchParams({
+        maxResults: "25",
+        accountId: gid,
+        timeMin,
+        timeMax,
+      });
+      const calRes = await fetch(`/api/integrations/google/calendar-events?${calQs}`, { credentials: "include" });
+      const calJson = (await calRes.json().catch(() => null)) as Record<string, unknown> | null;
+      const accEmail = accounts.find((a) => a.id === gid)?.account_email ?? "";
+      if (!calRes.ok) {
+        if (calRes.status !== 404) calHadError = true;
+        continue;
       }
-      setEvents([]);
-    } else {
-      const list = Array.isArray(calJson?.events) ? (calJson.events as CalendarRow[]) : [];
-      setEvents(list);
+      const list = Array.isArray(calJson?.events)
+        ? (calJson!.events as Omit<CalendarRow, "source" | "accountEmail">[])
+        : [];
+      for (const ev of list) {
+        mergedCal.push({
+          ...ev,
+          source: "google",
+          accountEmail: accEmail,
+        });
+      }
     }
+
+    for (const acc of imapList) {
+      const calQs = new URLSearchParams({
+        accountId: acc.id,
+        maxResults: "40",
+        timeMin,
+        timeMax,
+      });
+      const calRes = await fetch(`/api/integrations/imap/calendar-events?${calQs}`, { credentials: "include" });
+      const calJson = (await calRes.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!calRes.ok) {
+        calHadError = true;
+        continue;
+      }
+      const list = Array.isArray(calJson?.events) ? (calJson!.events as CalendarRow[]) : [];
+      for (const ev of list) {
+        mergedCal.push({
+          ...ev,
+          source: "imap",
+          accountEmail: ev.accountEmail || acc.account_email,
+        });
+      }
+    }
+
+    mergedCal.sort((a, b) => String(a.start ?? "").localeCompare(String(b.start ?? "")));
+    if (mergedCal.length === 0 && calHadError) {
+      setCalErr("Could not load calendar from one or more accounts.");
+    } else {
+      setCalErr(null);
+    }
+    setEvents(mergedCal);
     setCalLoading(false);
   }, []);
 
@@ -109,9 +222,9 @@ export function GoogleWorkspaceView() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">Google</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">Mail &amp; calendar</h1>
           <p className="text-xs text-foreground/60">
-            Recent Gmail and primary calendar events (read-only).
+            Gmail, Google Calendar, and connected IMAP / CalDAV accounts (read-only).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -139,8 +252,8 @@ export function GoogleWorkspaceView() {
 
       {notConnected && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
-          Connect your Google account to load mail and calendar here. Use{" "}
-          <strong>Connect Google</strong> above or Integrations in Settings.
+          Connect Google (OAuth) or add an IMAP account under{" "}
+          <strong>Settings → Integrations → Connect email</strong> to load mail and calendar here.
         </div>
       )}
 
@@ -165,6 +278,9 @@ export function GoogleWorkspaceView() {
                   <p className="text-xs text-foreground/50">Could not load message.</p>
                 ) : (
                   <>
+                    <p className="text-[10px] uppercase tracking-wide text-foreground/45">
+                      {m.source === "google" ? "Google" : "IMAP"} · {m.accountEmail}
+                    </p>
                     <p className="line-clamp-2 text-sm font-medium text-foreground">{m.subject}</p>
                     <p className="mt-0.5 text-[11px] text-foreground/55">{m.from}</p>
                     <p className="mt-1 line-clamp-2 text-xs text-foreground/60">{m.snippet}</p>
@@ -194,9 +310,12 @@ export function GoogleWorkspaceView() {
               <li className="px-4 py-8 text-center text-xs text-foreground/50">No upcoming events.</li>
             ) : null}
             {events.map((ev) => (
-              <li key={ev.id || ev.summary} className="px-4 py-3">
+              <li key={`${ev.source}:${ev.id}`} className="px-4 py-3">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                   <div>
+                    <p className="text-[10px] uppercase tracking-wide text-foreground/45">
+                      {ev.source === "google" ? "Google" : "CalDAV"} · {ev.accountEmail}
+                    </p>
                     <p className="text-sm font-medium text-foreground">{ev.summary}</p>
                     {ev.location ? (
                       <p className="text-[11px] text-foreground/55">{ev.location}</p>

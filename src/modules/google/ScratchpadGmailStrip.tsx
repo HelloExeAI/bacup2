@@ -398,9 +398,170 @@ function ScratchpadGmailAccountPanel({
   );
 }
 
+function imapMessageLocalYmd(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** IMAP inbox for selected scratchpad day (read-only; no Gmail thread compose). */
+function ScratchpadImapAccountPanel({
+  accountId,
+  accountEmail,
+  displayName,
+}: {
+  accountId: string;
+  accountEmail: string;
+  displayName?: string | null;
+}) {
+  const selectedDate = useScratchpadStore((s) => s.selectedDate);
+  const [mailDate, setMailDate] = React.useState(selectedDate);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [listExpanded, setListExpanded] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [messages, setMessages] = React.useState<GmailRow[] | null>(null);
+  const listId = React.useId();
+  const panelRef = React.useRef<HTMLElement>(null);
+
+  React.useEffect(() => {
+    setMailDate(selectedDate);
+  }, [selectedDate]);
+
+  const load = React.useCallback(async () => {
+    setError(null);
+    try {
+      const q = new URLSearchParams({ accountId, maxResults: "80" });
+      const res = await fetch(`/api/integrations/imap/messages?${q}`, { credentials: "include" });
+      const j = (await res.json().catch(() => null)) as { message?: string; messages?: unknown } | null;
+      if (!res.ok) {
+        setError(typeof j?.message === "string" ? j.message : "Could not load mail.");
+        setMessages([]);
+        return;
+      }
+      const raw = Array.isArray(j?.messages) ? j.messages : [];
+      const filtered = (
+        raw as { id: string; subject: string; from: string; date: string; snippet?: string }[]
+      ).filter((m) => imapMessageLocalYmd(m.date) === mailDate);
+      setMessages(
+        filtered.map((m) => ({
+          id: m.id,
+          subject: m.subject,
+          from: m.from,
+          date: m.date,
+          snippet: m.snippet ?? "",
+        })),
+      );
+    } catch {
+      setError("Could not load mail.");
+      setMessages([]);
+    }
+  }, [accountId, mailDate]);
+
+  React.useEffect(() => {
+    void load();
+  }, [load]);
+
+  React.useEffect(() => {
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [load]);
+
+  React.useEffect(() => {
+    if (!listExpanded) return;
+    const onDown = (e: MouseEvent) => {
+      const el = panelRef.current;
+      if (!el?.contains(e.target as Node)) setListExpanded(false);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [listExpanded]);
+
+  const titleText = displayName?.trim() ? displayName.trim() : accountEmail;
+
+  return (
+    <section ref={panelRef} className={MAIL_ACCOUNT_CARD_SHELL} aria-label={`Mail ${titleText}`}>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setListExpanded(true)}
+          aria-expanded={listExpanded}
+          aria-controls={listId}
+          className="min-w-0 flex-1 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          <h2 className="truncate text-xs font-semibold tracking-tight text-foreground" title={accountEmail}>
+            {titleText}
+          </h2>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">IMAP · {accountEmail}</p>
+        </button>
+        <IconButton
+          label={searchOpen ? "Close date search" : "Search mail by date"}
+          pressed={searchOpen}
+          onClick={() => setSearchOpen((v) => !v)}
+        >
+          <SearchIcon />
+        </IconButton>
+      </div>
+
+      {searchOpen ? (
+        <div className="mt-3 rounded-lg border border-border/50 bg-background/50 px-2.5 py-2">
+          <label
+            htmlFor={`${listId}-date`}
+            className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            Message date
+          </label>
+          <input
+            id={`${listId}-date`}
+            type="date"
+            value={mailDate}
+            onChange={(e) => setMailDate(e.target.value)}
+            className="h-9 w-full max-w-[11rem] rounded-md border border-border/70 bg-background px-2 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          />
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="mt-3 text-[11px] text-red-600/90 dark:text-red-400">{error}</p>
+      ) : listExpanded ? (
+        <ul
+          id={listId}
+          role="list"
+          aria-label={`IMAP messages for ${accountEmail}`}
+          className="mt-3 max-h-[min(50vh,320px)] space-y-2 overflow-y-auto pr-0.5"
+        >
+          {messages === null ? null : messages.length === 0 ? (
+            <li className="rounded-lg border border-border/40 bg-background/40 px-2.5 py-3 text-center text-[11px] text-muted-foreground">
+              No messages in Inbox for this day.
+            </li>
+          ) : (
+            messages.map((m) => (
+              <li key={m.id}>
+                <div className="rounded-lg border border-border/50 bg-background/55 px-2.5 py-2 text-left shadow-[0_1px_0_rgba(70,54,39,0.03)]">
+                  <p className="line-clamp-2 text-xs font-medium text-foreground">{m.subject}</p>
+                  <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">{m.from}</p>
+                  {m.snippet ? (
+                    <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground/90">{m.snippet}</p>
+                  ) : null}
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 export function ScratchpadGmailStrip() {
   const { openSettingsToTab } = useSettingsModal();
   const [googleAccounts, setGoogleAccounts] = React.useState<
+    Pick<ConnectedAccountRow, "id" | "account_email" | "display_name">[]
+  >([]);
+  const [imapAccounts, setImapAccounts] = React.useState<
     Pick<ConnectedAccountRow, "id" | "account_email" | "display_name">[]
   >([]);
   /** After first fetch completes; refetches do not hide the strip. */
@@ -412,6 +573,7 @@ export function ScratchpadGmailStrip() {
       const j = (await res.json().catch(() => null)) as { accounts?: ConnectedAccountRow[] } | null;
       if (!res.ok || !j?.accounts) {
         setGoogleAccounts([]);
+        setImapAccounts([]);
         return;
       }
       const google = j.accounts
@@ -421,9 +583,18 @@ export function ScratchpadGmailStrip() {
           account_email: a.account_email,
           display_name: a.display_name ?? null,
         }));
+      const imap = j.accounts
+        .filter((a) => a.provider === "imap")
+        .map((a) => ({
+          id: a.id,
+          account_email: a.account_email,
+          display_name: a.display_name ?? null,
+        }));
       setGoogleAccounts(google);
+      setImapAccounts(imap);
     } catch {
       setGoogleAccounts([]);
+      setImapAccounts([]);
     } finally {
       setAccountsReady(true);
     }
@@ -448,14 +619,14 @@ export function ScratchpadGmailStrip() {
     return null;
   }
 
-  if (googleAccounts.length === 0) {
+  if (googleAccounts.length === 0 && imapAccounts.length === 0) {
     return (
       <section className={MAIL_STRIP_SHELL} aria-label="Mail">
         <div className="mb-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground/80">Mail</h2>
         </div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">
-          No Google accounts connected — open{" "}
+          No mail accounts connected — open{" "}
           <button
             type="button"
             onClick={() => openSettingsToTab("integrations")}
@@ -463,7 +634,7 @@ export function ScratchpadGmailStrip() {
           >
             Settings → Integrations
           </button>{" "}
-          to connect one or more Google accounts, then return here. Use{" "}
+          to connect Google or IMAP email, then return here. Use{" "}
           <button
             type="button"
             onClick={() => void loadGoogleAccounts()}
@@ -481,6 +652,14 @@ export function ScratchpadGmailStrip() {
     <div className="mt-4 space-y-3">
       {googleAccounts.map((acc) => (
         <ScratchpadGmailAccountPanel
+          key={acc.id}
+          accountId={acc.id}
+          accountEmail={acc.account_email}
+          displayName={acc.display_name}
+        />
+      ))}
+      {imapAccounts.map((acc) => (
+        <ScratchpadImapAccountPanel
           key={acc.id}
           accountId={acc.id}
           accountEmail={acc.account_email}

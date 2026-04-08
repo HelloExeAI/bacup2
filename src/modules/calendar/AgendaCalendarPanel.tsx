@@ -81,6 +81,8 @@ function sourceLabel(source: TimelineItem["source"]): string {
       return "Google";
     case "outlook":
       return "Outlook";
+    case "imap":
+      return "Email";
     case "task":
       return "Task";
     case "milestone":
@@ -94,6 +96,8 @@ function accentBarClass(source: TimelineItem["source"]): string {
   switch (source) {
     case "outlook":
       return "bg-sky-500/55 dark:bg-sky-400/45";
+    case "imap":
+      return "bg-violet-500/55 dark:bg-violet-400/45";
     case "task":
       return "bg-amber-500/55 dark:bg-amber-400/45";
     case "milestone":

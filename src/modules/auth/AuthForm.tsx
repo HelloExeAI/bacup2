@@ -24,13 +24,13 @@ export function AuthForm({ oauthError }: { oauthError?: string }) {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(oauthError ?? null);
   const [loading, setLoading] = React.useState(false);
-  const [oauthLoading, setOauthLoading] = React.useState<"google" | "azure" | null>(null);
+  const [oauthLoading, setOauthLoading] = React.useState<"google" | null>(null);
 
   React.useEffect(() => {
     if (oauthError) setError(oauthError);
   }, [oauthError]);
 
-  async function signInWithOAuth(provider: "google" | "azure") {
+  async function signInWithOAuth(provider: "google") {
     setError(null);
     setOauthLoading(provider);
     try {
@@ -41,9 +41,7 @@ export function AuthForm({ oauthError }: { oauthError?: string }) {
         provider,
         options: {
           redirectTo,
-          ...(provider === "google"
-            ? { queryParams: { access_type: "offline", prompt: "consent" } }
-            : {}),
+          queryParams: { access_type: "offline", prompt: "consent" },
         },
       });
       if (oErr) throw oErr;
@@ -211,26 +209,15 @@ export function AuthForm({ oauthError }: { oauthError?: string }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full border border-border"
-                  disabled={loading || oauthLoading !== null}
-                  onClick={() => void signInWithOAuth("google")}
-                >
-                  {oauthLoading === "google" ? "Redirecting…" : "Google"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full border border-border"
-                  disabled={loading || oauthLoading !== null}
-                  onClick={() => void signInWithOAuth("azure")}
-                >
-                  {oauthLoading === "azure" ? "Redirecting…" : "Microsoft"}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full border border-border"
+                disabled={loading || oauthLoading !== null}
+                onClick={() => void signInWithOAuth("google")}
+              >
+                {oauthLoading === "google" ? "Redirecting…" : "Google"}
+              </Button>
 
               <div className="flex items-center justify-between pt-2 text-sm text-muted-foreground">
                 <button
