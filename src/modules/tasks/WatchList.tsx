@@ -10,7 +10,7 @@ import { TaskDescriptionAiField } from "@/modules/tasks/TaskDescriptionAiField";
 import { TaskQuickDetailModal } from "@/modules/tasks/TaskQuickDetailModal";
 import { scratchpadGmailHref } from "@/lib/tasks/scratchpadGmailHref";
 
-type WatchTab = "all" | "todo" | "followup" | "reminder";
+export type WatchTab = "all" | "todo" | "followup" | "reminder";
 
 type WatchEditDraft = {
   title: string;
@@ -108,11 +108,14 @@ export function WatchListModal({
   dueDateFilter,
   /** Overrides header title (e.g. “Today's tasks” from Today’s Focus). */
   listTitle,
+  /** Open on a specific tab (e.g. Follow-ups from Overview KPI). */
+  initialTab,
 }: {
   open: boolean;
   onClose: () => void;
   dueDateFilter?: string | null;
   listTitle?: string | null;
+  initialTab?: WatchTab;
 }) {
   const tasks = useTaskStore((s) => s.tasks);
   const setTasks = useTaskStore((s) => s.setTasks);
@@ -134,8 +137,8 @@ export function WatchListModal({
   }, []);
 
   useEffect(() => {
-    if (open) setTab("all");
-  }, [open, dueDateFilter]);
+    if (open) setTab(initialTab ?? "all");
+  }, [open, dueDateFilter, initialTab]);
 
   useEffect(() => {
     if (!open) cancelEdit();

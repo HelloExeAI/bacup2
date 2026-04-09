@@ -7,9 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useUserStore } from "@/store/userStore";
 import type { SettingsPayload, TeamMemberSummary } from "@/modules/settings/types";
 import { WorkspaceOsV2, type WorkspaceV2Bundle } from "@/modules/workspace/WorkspaceOsV2";
-import { TodayFocus } from "@/modules/tasks/TodayFocus";
-import { WatchListModal } from "@/modules/tasks/WatchList";
-import { requestOpenTodayFocusExpanded } from "@/modules/tasks/todayFocusOpenBus";
+import { requestOverviewKpi, type OverviewKpiKind } from "@/modules/tasks/overviewKpiBus";
 
 type HubContext = {
   workspaceOwnerId: string;
@@ -110,10 +108,6 @@ export function WorkspaceHub() {
     dependencies: [],
     meetings: [],
   });
-
-  const [watchOpen, setWatchOpen] = React.useState(false);
-  const [watchDueDateFilter, setWatchDueDateFilter] = React.useState<string | undefined>(undefined);
-  const [watchListTitle, setWatchListTitle] = React.useState<string | undefined>(undefined);
 
   const [eaPolicies, setEaPolicies] = React.useState<
     Array<{
@@ -384,43 +378,31 @@ export function WorkspaceHub() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {(
             [
-              ["Overdue", focusStats.overdue],
-              ["Today's load", focusStats.todaysLoad],
-              ["Follow-ups", focusStats.waitingFollowups],
-              ["Priorities", focusStats.activePriorities],
-              ["Pending decisions", focusStats.pendingDecisions ?? 0],
+              ["overdue", "Overdue", focusStats.overdue],
+              ["todaysLoad", "Today's load", focusStats.todaysLoad],
+              ["followups", "Follow-ups", focusStats.waitingFollowups],
+              ["priorities", "Priorities", focusStats.activePriorities],
+              ["pendingDecisions", "Pending decisions", focusStats.pendingDecisions ?? 0],
             ] as const
-          ).map(([k, v]) => (
+          ).map(([kind, label, v]) => (
             <button
-              key={k}
+              key={kind}
               type="button"
-              onClick={() => requestOpenTodayFocusExpanded()}
+              onClick={() => requestOverviewKpi(kind as OverviewKpiKind)}
               className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-left shadow-sm transition-[box-shadow,transform] hover:bg-muted/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.99]"
             >
-              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{k}</div>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{v}</div>
-              <span className="sr-only">Open Today&apos;s Focus details</span>
+              <span className="sr-only">
+                {kind === "overdue" && "Open overdue tasks"}
+                {kind === "todaysLoad" && "Open tasks due today"}
+                {kind === "followups" && "Open follow-ups"}
+                {kind === "priorities" && "Open priority todos"}
+                {kind === "pendingDecisions" && "Scroll to decision queue"}
+              </span>
             </button>
           ))}
         </div>
-        <TodayFocus
-          compactSurface={false}
-          onOpenTasks={(opts) => {
-            setWatchDueDateFilter(opts?.dueDateFilter);
-            setWatchListTitle(opts?.listTitle);
-            setWatchOpen(true);
-          }}
-        />
-        <WatchListModal
-          open={watchOpen}
-          onClose={() => {
-            setWatchOpen(false);
-            setWatchDueDateFilter(undefined);
-            setWatchListTitle(undefined);
-          }}
-          dueDateFilter={watchDueDateFilter}
-          listTitle={watchListTitle}
-        />
       </section>
 
       <div className="grid gap-8 lg:grid-cols-2">

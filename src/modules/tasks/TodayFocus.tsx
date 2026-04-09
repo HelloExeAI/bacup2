@@ -19,7 +19,8 @@ import { ScheduleConflictModal } from "@/modules/tasks/ScheduleConflictModal";
 import { detectScheduleConflicts } from "@/lib/scheduling/detectScheduleConflicts";
 import type { TimelineItem } from "@/lib/timeline/types";
 import { fetchTodayTimelineCached, peekTodayTimelineCache } from "@/lib/timeline/todayClientCache";
-import { setTodayFocusExpandedListener } from "@/modules/tasks/todayFocusOpenBus";
+import type { WatchTab } from "@/modules/tasks/WatchList";
+import { setOverviewKpiListener, type OverviewKpiKind } from "@/modules/tasks/overviewKpiBus";
 
 /** No borders — depth via shadow only (app UI convention). */
 const focusExpandedCardClass =
@@ -32,19 +33,16 @@ export type OpenWatchListOptions = {
   dueDateFilter?: string;
   /** Modal title (default: “Watch List”). Use “Today’s tasks” from Top Priorities so UI matches Today’s Focus. */
   listTitle?: string;
+  /** Initial tab in Watch List (e.g. follow-up KPI). */
+  initialTab?: WatchTab;
 };
 
 export type TodayFocusProps = {
   /** Opens Watch List; pass `dueDateFilter` to show only tasks due on that day. */
   onOpenTasks?: (opts?: OpenWatchListOptions) => void;
-  /**
-   * When false, hides the sidebar-style header + preview button (used on Overview /workspace).
-   * Expanded panel + modals still mount; use `requestOpenTodayFocusExpanded()` from overview cards.
-   */
-  compactSurface?: boolean;
 };
 
-export function TodayFocus({ onOpenTasks, compactSurface = true }: TodayFocusProps) {
+export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
   const router = useRouter();
   const tasks = useTaskStore((s) => s.tasks);
   const profile = useUserStore((s) => s.profile);
@@ -145,13 +143,16 @@ export function TodayFocus({ onOpenTasks, compactSurface = true }: TodayFocusPro
     };
   }, [events, profile, tasks, today]);
 
-  const openWatchList = (opts?: OpenWatchListOptions) => {
-    setOpen(false);
-    window.setTimeout(() => {
-      if (onOpenTasks) onOpenTasks(opts);
-      else router.push("/tasks");
-    }, 0);
-  };
+  const openWatchList = useCallback(
+    (opts?: OpenWatchListOptions) => {
+      setOpen(false);
+      window.setTimeout(() => {
+        if (onOpenTasks) onOpenTasks(opts);
+        else router.push("/tasks");
+      }, 0);
+    },
+    [onOpenTasks, router],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -190,47 +191,45 @@ export function TodayFocus({ onOpenTasks, compactSurface = true }: TodayFocusPro
   const conflictCount = scheduleConflicts.length;
 
   useEffect(() => {
-    const fn = () => {
-      setOpen(true);
+    const run = (kind: OverviewKpiKind) => {
       try {
-        posthog.capture("today_focus_opened", {
-          source: "overview_or_bus",
-          progress,
-          overdue_self: overdueSelf,
-          overdue_team: overdueTeam,
-        });
+        posthog.capture("overview_kpi_click", { kind });
       } catch {
         /* optional */
       }
+      switch (kind) {
+        case "overdue":
+          setOverdueModalOpen(true);
+          return;
+        case "todaysLoad":
+          openWatchList({ dueDateFilter: today, listTitle: "Today's load", initialTab: "all" });
+          return;
+        case "followups":
+          openWatchList({ listTitle: "Follow-ups", initialTab: "followup" });
+          return;
+        case "priorities":
+          openWatchList({ listTitle: "Priorities", initialTab: "todo" });
+          return;
+        case "pendingDecisions":
+          document.getElementById("decisions-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+      }
     };
-    setTodayFocusExpandedListener(fn);
-    return () => setTodayFocusExpandedListener(null);
-  }, [progress, overdueSelf, overdueTeam]);
+    setOverviewKpiListener(run);
+    return () => setOverviewKpiListener(null);
+  }, [today, openWatchList]);
 
-  if (bullets.length === 0 && compactSurface) {
-    return (
-      <div className="mt-2 text-xs text-muted-foreground">
-        Preparing your day briefing...
-      </div>
-    );
-  }
-
-  const linesForUi =
-    bullets.length > 0
-      ? bullets
-      : fallbackDayBriefing(todayTasks, todayEvents, backlog)
-          .slice(0, 3)
-          .map(compact)
-          .filter(Boolean);
-
+  const briefingReady = bullets.length > 0;
   const topPriorityTasks = todayTasks.slice(0, 3);
   const nextTask = todayTasks[0] ?? backlog[0];
   const nextBestAction = nextTask?.title ?? "Nothing pending. You're clear.";
-  const aiSummary = linesForUi.slice(0, 2).join(" ");
+  const aiSummary = briefingReady ? bullets.slice(0, 2).join(" ") : "";
   const allTodayCompleted = doneToday.length > 0 && todayTasks.length === 0;
-  const headline = allTodayCompleted
-    ? `Completed ${doneToday.length} task${doneToday.length > 1 ? "s" : ""}.`
-    : linesForUi[0] ?? "Your day at a glance.";
+  const headline = !briefingReady
+    ? "Preparing your day briefing..."
+    : allTodayCompleted
+      ? `Completed ${doneToday.length} task${doneToday.length > 1 ? "s" : ""}.`
+      : bullets[0];
   const progressBarClass =
     progress >= 100
       ? "bg-emerald-500/80"
@@ -248,42 +247,38 @@ export function TodayFocus({ onOpenTasks, compactSurface = true }: TodayFocusPro
 
   return (
     <>
-      {compactSurface ? (
-        <>
-          <div className="mt-1 flex items-center justify-between">
-            <div className="text-xs font-semibold tracking-wide text-foreground">Today&apos;s Focus</div>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(true);
-                posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam });
-              }}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-lg leading-none text-muted-foreground hover:bg-foreground/5"
-              aria-label="Open Today Focus"
-            >
-              ›
-            </button>
-          </div>
+      <div className="mt-1 flex items-center justify-between">
+        <div className="text-xs font-semibold tracking-wide text-foreground">Today&apos;s Focus</div>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+            posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam });
+          }}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-lg leading-none text-muted-foreground hover:bg-foreground/5"
+          aria-label="Open Today Focus"
+        >
+          ›
+        </button>
+      </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(true);
-              posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam });
-            }}
-            className="mt-1 w-full rounded-md bg-muted/55 p-2 text-left shadow-[0_10px_24px_rgba(0,0,0,0.08)] hover:bg-foreground/5"
-          >
-            <div className="mt-1 text-sm text-foreground">{headline}</div>
-            <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Daily progress</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="mt-1 h-2 w-full rounded-full bg-muted">
-              <div className={`h-2 rounded-full transition-colors ${progressBarClass}`} style={{ width: `${progress}%` }} />
-            </div>
-          </button>
-        </>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam });
+        }}
+        className="mt-1 w-full rounded-md bg-muted/55 p-2 text-left shadow-[0_10px_24px_rgba(0,0,0,0.08)] hover:bg-foreground/5"
+      >
+        <div className="mt-1 text-sm text-foreground">{headline}</div>
+        <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>Daily progress</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="mt-1 h-2 w-full rounded-full bg-muted">
+          <div className={`h-2 rounded-full transition-colors ${progressBarClass}`} style={{ width: `${progress}%` }} />
+        </div>
+      </button>
 
       {open ? (
         <div className="fixed inset-0 z-50">
@@ -308,7 +303,9 @@ export function TodayFocus({ onOpenTasks, compactSurface = true }: TodayFocusPro
             <div className="max-h-[78vh] space-y-3 overflow-y-auto p-4">
               <section className={focusExpandedCardClass}>
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI Summary</div>
-                <div className="mt-1 text-base text-foreground">{aiSummary}</div>
+                <div className="mt-1 text-base text-foreground">
+                  {aiSummary || "Briefing is still loading — task counts below are live."}
+                </div>
               </section>
 
               <button
