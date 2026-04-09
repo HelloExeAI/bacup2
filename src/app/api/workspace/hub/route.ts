@@ -108,6 +108,21 @@ export async function GET() {
         ? (decisionsRes.data as { status: string }[]).filter((d) => d.status === "pending").length
         : 0;
 
+    // Approvals (MVP): use pendingDecisions slot for "pending approvals" so UI can ship incrementally.
+    let pendingApprovals = 0;
+    try {
+      const { count } = await supabase
+        .from("workspace_approvals")
+        .select("*", { count: "exact", head: true })
+        .eq("workspace_owner_id", ws)
+        .eq("approver_user_id", user.id)
+        .in("status", ["pending", "needs_changes"]);
+      pendingApprovals = typeof count === "number" ? count : 0;
+    } catch {
+      // Migration not applied yet.
+      pendingApprovals = 0;
+    }
+
     /** V2: playbooks, dependency map, meeting OS (tables from workspace_v2 migration). */
     let v2: {
       playbookTemplates: Array<Record<string, unknown>>;
@@ -220,7 +235,7 @@ export async function GET() {
         "Inbox uses today-only fetch; bodies are not stored. Subject lines may be saved as task labels. Past mail is reached via search, not day browsing.",
       morningBrief: {
         ...morningBrief,
-        pendingDecisions,
+        pendingDecisions: pendingApprovals || pendingDecisions,
       },
       decisions: hideDecisions ? [] : decisionsRes.data ?? [],
       projects: hideProjects ? [] : projectsRes.data ?? [],

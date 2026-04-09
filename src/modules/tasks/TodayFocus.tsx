@@ -211,7 +211,7 @@ export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
           openWatchList({ listTitle: "Priorities", initialTab: "todo" });
           return;
         case "pendingDecisions":
-          document.getElementById("decisions-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          document.getElementById("approvals-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
           return;
       }
     };
