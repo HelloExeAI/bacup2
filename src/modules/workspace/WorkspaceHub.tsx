@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUserStore } from "@/store/userStore";
 import type { SettingsPayload, TeamMemberSummary } from "@/modules/settings/types";
 import { WorkspaceOsV2, type WorkspaceV2Bundle } from "@/modules/workspace/WorkspaceOsV2";
+import { TodayFocus } from "@/modules/tasks/TodayFocus";
+import { WatchListModal } from "@/modules/tasks/WatchList";
+import { requestOpenTodayFocusExpanded } from "@/modules/tasks/todayFocusOpenBus";
 
 type HubContext = {
   workspaceOwnerId: string;
@@ -59,19 +61,20 @@ type OrgEdge = {
   relation_rank: number;
 };
 
-function homeLabel(role: string): string {
-  switch (role) {
-    case "founder":
-      return "Command center";
-    case "ea":
-      return "Executive support";
-    case "manager":
-      return "Team execution";
-    case "associate":
-      return "Your workspace";
-    default:
-      return "Workspace";
-  }
+function overviewGreeting(profile: {
+  last_name?: string | null;
+  display_name?: string | null;
+  name?: string | null;
+} | null): string {
+  const h = new Date().getHours();
+  const part = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const ln = profile?.last_name?.trim();
+  if (ln) return `${part}, ${ln}.`;
+  const fromDisplay = profile?.display_name?.trim().split(/\s+/).filter(Boolean).pop();
+  if (fromDisplay && fromDisplay.length > 0) return `${part}, ${fromDisplay}.`;
+  const fromName = profile?.name?.trim().split(/\s+/).filter(Boolean).pop();
+  if (fromName) return `${part}, ${fromName}.`;
+  return `${part}.`;
 }
 
 function healthDot(status: string): string {
@@ -95,7 +98,6 @@ export function WorkspaceHub() {
   const [err, setErr] = React.useState<string | null>(null);
   const [ctx, setCtx] = React.useState<HubContext | null>(null);
   const [brief, setBrief] = React.useState<Record<string, number> | null>(null);
-  const [emailNote, setEmailNote] = React.useState("");
   const [decisions, setDecisions] = React.useState<DecisionRow[]>([]);
   const [projects, setProjects] = React.useState<ProjectRow[]>([]);
   const [values, setValues] = React.useState<ValueRow[]>([]);
@@ -108,6 +110,10 @@ export function WorkspaceHub() {
     dependencies: [],
     meetings: [],
   });
+
+  const [watchOpen, setWatchOpen] = React.useState(false);
+  const [watchDueDateFilter, setWatchDueDateFilter] = React.useState<string | undefined>(undefined);
+  const [watchListTitle, setWatchListTitle] = React.useState<string | undefined>(undefined);
 
   const [eaPolicies, setEaPolicies] = React.useState<
     Array<{
@@ -135,7 +141,6 @@ export function WorkspaceHub() {
       const c = hubJson?.context as HubContext | undefined;
       if (c) setCtx(c);
       setBrief((hubJson?.morningBrief as Record<string, number>) ?? null);
-      setEmailNote(typeof hubJson?.emailPolicyNote === "string" ? hubJson.emailPolicyNote : "");
       setDecisions((hubJson?.decisions as DecisionRow[]) ?? []);
       setProjects((hubJson?.projects as ProjectRow[]) ?? []);
       setValues((hubJson?.companyValues as ValueRow[]) ?? []);
@@ -355,65 +360,68 @@ export function WorkspaceHub() {
     );
   }
 
-  const role = ctx?.viewerRole ?? profile?.role ?? "member";
+  const focusStats = brief ?? {
+    overdue: 0,
+    todaysLoad: 0,
+    waitingFollowups: 0,
+    activePriorities: 0,
+    pendingDecisions: 0,
+  };
 
   return (
     <div className="space-y-8">
       <header className="space-y-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {homeLabel(role)}
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Business OS</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Morning brief, decisions, project health, programs &amp; playbooks, cross-team dependencies, and meeting OS.
-          Security &amp; data controls live in Settings → Security.
-        </p>
-        {emailNote ? (
-          <p className="mt-2 max-w-3xl rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-            <span className="font-medium text-foreground/80">Email policy: </span>
-            {emailNote}
-          </p>
-        ) : null}
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Overview</h1>
       </header>
 
-      {brief ? (
-        <section aria-labelledby="brief-heading">
-          <h2 id="brief-heading" className="mb-3 text-sm font-semibold text-foreground">
-            Morning brief
+      <section aria-labelledby="today-focus-overview-heading">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <p className="text-base font-medium text-foreground">{overviewGreeting(profile)}</p>
+          <h2 id="today-focus-overview-heading" className="text-sm font-semibold text-foreground">
+            Today&apos;s Focus
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              ["Overdue", brief.overdue],
-              ["Today's load", brief.todaysLoad],
-              ["Follow-ups", brief.waitingFollowups],
-              ["Priorities", brief.activePriorities],
-              ["Pending decisions", brief.pendingDecisions ?? 0],
-            ].map(([k, v]) => (
-              <div
-                key={String(k)}
-                className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 shadow-sm"
-              >
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{k}</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{v}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-3">
-            <Link
-              href="/dashboard"
-              className="text-xs font-medium text-foreground underline underline-offset-2 hover:text-foreground/80"
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {(
+            [
+              ["Overdue", focusStats.overdue],
+              ["Today's load", focusStats.todaysLoad],
+              ["Follow-ups", focusStats.waitingFollowups],
+              ["Priorities", focusStats.activePriorities],
+              ["Pending decisions", focusStats.pendingDecisions ?? 0],
+            ] as const
+          ).map(([k, v]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => requestOpenTodayFocusExpanded()}
+              className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-left shadow-sm transition-[box-shadow,transform] hover:bg-muted/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.99]"
             >
-              Open task cockpit
-            </Link>
-            <Link
-              href="/calendar"
-              className="text-xs font-medium text-foreground underline underline-offset-2 hover:text-foreground/80"
-            >
-              Calendar
-            </Link>
-          </div>
-        </section>
-      ) : null}
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{k}</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{v}</div>
+              <span className="sr-only">Open Today&apos;s Focus details</span>
+            </button>
+          ))}
+        </div>
+        <TodayFocus
+          compactSurface={false}
+          onOpenTasks={(opts) => {
+            setWatchDueDateFilter(opts?.dueDateFilter);
+            setWatchListTitle(opts?.listTitle);
+            setWatchOpen(true);
+          }}
+        />
+        <WatchListModal
+          open={watchOpen}
+          onClose={() => {
+            setWatchOpen(false);
+            setWatchDueDateFilter(undefined);
+            setWatchListTitle(undefined);
+          }}
+          dueDateFilter={watchDueDateFilter}
+          listTitle={watchListTitle}
+        />
+      </section>
 
       <div className="grid gap-8 lg:grid-cols-2">
         <section className="space-y-3" aria-labelledby="decisions-heading">

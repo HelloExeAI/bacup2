@@ -19,6 +19,7 @@ import { ScheduleConflictModal } from "@/modules/tasks/ScheduleConflictModal";
 import { detectScheduleConflicts } from "@/lib/scheduling/detectScheduleConflicts";
 import type { TimelineItem } from "@/lib/timeline/types";
 import { fetchTodayTimelineCached, peekTodayTimelineCache } from "@/lib/timeline/todayClientCache";
+import { setTodayFocusExpandedListener } from "@/modules/tasks/todayFocusOpenBus";
 
 /** No borders — depth via shadow only (app UI convention). */
 const focusExpandedCardClass =
@@ -36,9 +37,14 @@ export type OpenWatchListOptions = {
 export type TodayFocusProps = {
   /** Opens Watch List; pass `dueDateFilter` to show only tasks due on that day. */
   onOpenTasks?: (opts?: OpenWatchListOptions) => void;
+  /**
+   * When false, hides the sidebar-style header + preview button (used on Overview /workspace).
+   * Expanded panel + modals still mount; use `requestOpenTodayFocusExpanded()` from overview cards.
+   */
+  compactSurface?: boolean;
 };
 
-export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
+export function TodayFocus({ onOpenTasks, compactSurface = true }: TodayFocusProps) {
   const router = useRouter();
   const tasks = useTaskStore((s) => s.tasks);
   const profile = useUserStore((s) => s.profile);
@@ -183,7 +189,25 @@ export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
   );
   const conflictCount = scheduleConflicts.length;
 
-  if (bullets.length === 0) {
+  useEffect(() => {
+    const fn = () => {
+      setOpen(true);
+      try {
+        posthog.capture("today_focus_opened", {
+          source: "overview_or_bus",
+          progress,
+          overdue_self: overdueSelf,
+          overdue_team: overdueTeam,
+        });
+      } catch {
+        /* optional */
+      }
+    };
+    setTodayFocusExpandedListener(fn);
+    return () => setTodayFocusExpandedListener(null);
+  }, [progress, overdueSelf, overdueTeam]);
+
+  if (bullets.length === 0 && compactSurface) {
     return (
       <div className="mt-2 text-xs text-muted-foreground">
         Preparing your day briefing...
@@ -191,12 +215,22 @@ export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
     );
   }
 
+  const linesForUi =
+    bullets.length > 0
+      ? bullets
+      : fallbackDayBriefing(todayTasks, todayEvents, backlog)
+          .slice(0, 3)
+          .map(compact)
+          .filter(Boolean);
+
   const topPriorityTasks = todayTasks.slice(0, 3);
   const nextTask = todayTasks[0] ?? backlog[0];
   const nextBestAction = nextTask?.title ?? "Nothing pending. You're clear.";
-  const aiSummary = bullets.slice(0, 2).join(" ");
+  const aiSummary = linesForUi.slice(0, 2).join(" ");
   const allTodayCompleted = doneToday.length > 0 && todayTasks.length === 0;
-  const headline = allTodayCompleted ? `Completed ${doneToday.length} task${doneToday.length > 1 ? "s" : ""}.` : bullets[0];
+  const headline = allTodayCompleted
+    ? `Completed ${doneToday.length} task${doneToday.length > 1 ? "s" : ""}.`
+    : linesForUi[0] ?? "Your day at a glance.";
   const progressBarClass =
     progress >= 100
       ? "bg-emerald-500/80"
@@ -214,32 +248,42 @@ export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
 
   return (
     <>
-      <div className="mt-1 flex items-center justify-between">
-        <div className="text-xs font-semibold tracking-wide text-foreground">Today&apos;s Focus</div>
-        <button
-          type="button"
-          onClick={() => { setOpen(true); posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam }); }}
-          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-lg leading-none text-muted-foreground hover:bg-foreground/5"
-          aria-label="Open Today Focus"
-        >
-          ›
-        </button>
-      </div>
+      {compactSurface ? (
+        <>
+          <div className="mt-1 flex items-center justify-between">
+            <div className="text-xs font-semibold tracking-wide text-foreground">Today&apos;s Focus</div>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(true);
+                posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam });
+              }}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-lg leading-none text-muted-foreground hover:bg-foreground/5"
+              aria-label="Open Today Focus"
+            >
+              ›
+            </button>
+          </div>
 
-      <button
-        type="button"
-        onClick={() => { setOpen(true); posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam }); }}
-        className="mt-1 w-full rounded-md bg-muted/55 p-2 text-left shadow-[0_10px_24px_rgba(0,0,0,0.08)] hover:bg-foreground/5"
-      >
-        <div className="mt-1 text-sm text-foreground">{headline}</div>
-        <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>Daily progress</span>
-          <span>{progress}%</span>
-        </div>
-        <div className="mt-1 h-2 w-full rounded-full bg-muted">
-          <div className={`h-2 rounded-full transition-colors ${progressBarClass}`} style={{ width: `${progress}%` }} />
-        </div>
-      </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              posthog.capture("today_focus_opened", { progress, overdue_self: overdueSelf, overdue_team: overdueTeam });
+            }}
+            className="mt-1 w-full rounded-md bg-muted/55 p-2 text-left shadow-[0_10px_24px_rgba(0,0,0,0.08)] hover:bg-foreground/5"
+          >
+            <div className="mt-1 text-sm text-foreground">{headline}</div>
+            <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Daily progress</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="mt-1 h-2 w-full rounded-full bg-muted">
+              <div className={`h-2 rounded-full transition-colors ${progressBarClass}`} style={{ width: `${progress}%` }} />
+            </div>
+          </button>
+        </>
+      ) : null}
 
       {open ? (
         <div className="fixed inset-0 z-50">
