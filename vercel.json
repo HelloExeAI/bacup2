@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/recurrence-reconcile",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/follow-automation",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/follow-reply-ingest",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

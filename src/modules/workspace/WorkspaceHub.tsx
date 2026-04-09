@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useUserStore } from "@/store/userStore";
 import type { SettingsPayload, TeamMemberSummary } from "@/modules/settings/types";
+import { useSettingsModal } from "@/modules/settings/SettingsProvider";
+import { FollowWithBacup } from "@/modules/workspace/FollowWithBacup";
+import { OutboundNudgeDraft } from "@/modules/workspace/OutboundNudgeDraft";
 import { WorkspaceOsV2, type WorkspaceV2Bundle } from "@/modules/workspace/WorkspaceOsV2";
 import { requestOverviewKpi, type OverviewKpiKind } from "@/modules/tasks/overviewKpiBus";
 
@@ -65,14 +68,61 @@ function overviewGreeting(profile: {
   name?: string | null;
 } | null): string {
   const h = new Date().getHours();
-  const part = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const part = h < 12 ? "Good Morning" : h < 17 ? "Good Afternoon" : "Good Evening";
   const ln = profile?.last_name?.trim();
-  if (ln) return `${part}, ${ln}.`;
+  if (ln) return `${part}, ${ln}!`;
   const fromDisplay = profile?.display_name?.trim().split(/\s+/).filter(Boolean).pop();
-  if (fromDisplay && fromDisplay.length > 0) return `${part}, ${fromDisplay}.`;
+  if (fromDisplay && fromDisplay.length > 0) return `${part}, ${fromDisplay}!`;
   const fromName = profile?.name?.trim().split(/\s+/).filter(Boolean).pop();
-  if (fromName) return `${part}, ${fromName}.`;
-  return `${part}.`;
+  if (fromName) return `${part}, ${fromName}!`;
+  return `${part}!`;
+}
+
+/** One energetic line tied to live KPIs (not generic fluff). */
+function motivationFromTodaysFocus(
+  stats: {
+    overdue: number;
+    todaysLoad: number;
+    waitingFollowups: number;
+    activePriorities: number;
+    pendingDecisions: number;
+  },
+  openCrossTeamDeps: number,
+): string {
+  const { overdue, todaysLoad, waitingFollowups, activePriorities, pendingDecisions } = stats;
+
+  if (overdue > 0) {
+    return overdue >= 8
+      ? "Overdue stack is real—take the oldest item first; momentum is your friend."
+      : "Overdue work is calling—clear one now before the pile grows.";
+  }
+  if (pendingDecisions > 0) {
+    return pendingDecisions >= 3
+      ? "Several decisions are waiting on you—one sharp call unlocks the whole team."
+      : "Leadership moment: a decision today beats a perfect one next week.";
+  }
+  if (openCrossTeamDeps > 0) {
+    return "Cross-team handoffs are open—nudge what you’re waiting on before dates slip.";
+  }
+  if (todaysLoad >= 5) {
+    return "Heavy due-today load—time-box the big rocks and protect focus time.";
+  }
+  if (todaysLoad >= 1) {
+    return "Execution mode—ship what’s due today and stay ahead of the clock.";
+  }
+  if (waitingFollowups > activePriorities && waitingFollowups >= 3) {
+    return "Follow-ups are outpacing new work—close loops so nothing boomerangs.";
+  }
+  if (activePriorities >= 4) {
+    return "Priorities are stacked—pick the one that moves revenue, risk, or people the most.";
+  }
+  if (waitingFollowups >= 2) {
+    return "Ops rhythm: your follow-ups keep promises and pipelines honest—keep swinging.";
+  }
+  if (activePriorities >= 2) {
+    return "Todo momentum—finish the next priority before the queue whispers louder.";
+  }
+  return "Clear runway—use the calm to get ahead or sharpen the next sprint.";
 }
 
 function healthDot(status: string): string {
@@ -91,6 +141,7 @@ function healthDot(status: string): string {
 export function WorkspaceHub() {
   const profile = useUserStore((s) => s.profile);
   const user = useUserStore((s) => s.user);
+  const { openSettingsToTab } = useSettingsModal();
 
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState<string | null>(null);
@@ -108,6 +159,8 @@ export function WorkspaceHub() {
     dependencies: [],
     meetings: [],
   });
+
+  const [followPendingApproval, setFollowPendingApproval] = React.useState(0);
 
   const [eaPolicies, setEaPolicies] = React.useState<
     Array<{
@@ -157,6 +210,9 @@ export function WorkspaceHub() {
           meetings: [],
         });
       }
+
+      const fa = hubJson?.followAutomation as { pendingApproval?: number } | undefined;
+      setFollowPendingApproval(typeof fa?.pendingApproval === "number" ? fa.pendingApproval : 0);
 
       const settingsJson = (await settingsRes.json().catch(() => null)) as SettingsPayload | null;
       if (settingsRes.ok && settingsJson?.teamMembers) {
@@ -340,6 +396,51 @@ export function WorkspaceHub() {
     if (res.ok) void reload();
   };
 
+  const [dayBriefLines, setDayBriefLines] = React.useState<string[] | null>(null);
+  const [dayBriefLoading, setDayBriefLoading] = React.useState(false);
+
+  const openCrossTeamDepsCount = React.useMemo(
+    () => (v2Bundle.dependencies ?? []).filter((d) => d.status === "open").length,
+    [v2Bundle.dependencies],
+  );
+
+  React.useEffect(() => {
+    if (loading || err) return;
+
+    const kpis = brief ?? {
+      overdue: 0,
+      todaysLoad: 0,
+      waitingFollowups: 0,
+      activePriorities: 0,
+      pendingDecisions: 0,
+    };
+
+    let cancelled = false;
+    setDayBriefLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/workspace/overview-brief", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ kpis, openCrossTeamDeps: openCrossTeamDepsCount }),
+        });
+        const j = (await res.json().catch(() => null)) as { lines?: unknown } | null;
+        const raw = Array.isArray(j?.lines) ? j.lines.map((x) => String(x)) : [];
+        if (cancelled) return;
+        setDayBriefLines(raw.length ? raw.slice(0, 5) : null);
+      } catch {
+        if (!cancelled) setDayBriefLines(null);
+      } finally {
+        if (!cancelled) setDayBriefLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, err, brief, openCrossTeamDepsCount]);
+
   if (loading) {
     return (
       <div className="text-sm text-muted-foreground">Loading workspace…</div>
@@ -354,24 +455,38 @@ export function WorkspaceHub() {
     );
   }
 
-  const focusStats = brief ?? {
-    overdue: 0,
-    todaysLoad: 0,
-    waitingFollowups: 0,
-    activePriorities: 0,
-    pendingDecisions: 0,
+  const focusStats = {
+    overdue: brief?.overdue ?? 0,
+    todaysLoad: brief?.todaysLoad ?? 0,
+    waitingFollowups: brief?.waitingFollowups ?? 0,
+    activePriorities: brief?.activePriorities ?? 0,
+    pendingDecisions: brief?.pendingDecisions ?? 0,
   };
+
+  const openCrossTeamDeps = (v2Bundle.dependencies ?? []).filter((d) => d.status === "open").length;
+  const focusMotivation = motivationFromTodaysFocus(focusStats, openCrossTeamDeps);
 
   return (
     <div className="space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Overview</h1>
-      </header>
-
+      {isFounder && followPendingApproval > 0 ? (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+          <span className="font-medium">{followPendingApproval} follow-up send(s)</span> waiting for your approval.
+          <button
+            type="button"
+            className="ml-2 font-medium text-foreground underline underline-offset-2"
+            onClick={() => openSettingsToTab("follow_automation")}
+          >
+            Review in Follow automation
+          </button>
+        </div>
+      ) : null}
       <section aria-labelledby="today-focus-overview-heading">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <p className="text-base font-medium text-foreground">{overviewGreeting(profile)}</p>
-          <h2 id="today-focus-overview-heading" className="text-sm font-semibold text-foreground">
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-lg font-semibold tracking-tight text-foreground">{overviewGreeting(profile)}</p>
+            <p className="max-w-2xl text-sm leading-snug text-muted-foreground">{focusMotivation}</p>
+          </div>
+          <h2 id="today-focus-overview-heading" className="shrink-0 text-sm font-semibold text-foreground">
             Today&apos;s Focus
           </h2>
         </div>
@@ -403,6 +518,30 @@ export function WorkspaceHub() {
             </button>
           ))}
         </div>
+        <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Day brief</h3>
+          {dayBriefLoading && !dayBriefLines?.length ? (
+            <p className="mt-2 text-xs text-muted-foreground">Drafting…</p>
+          ) : dayBriefLines && dayBriefLines.length > 0 ? (
+            <ul className="mt-2 list-none space-y-1.5 text-sm leading-snug text-foreground">
+              {dayBriefLines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">Brief unavailable.</p>
+          )}
+        </div>
+        <FollowWithBacup
+          kpis={focusStats}
+          openCrossTeamDeps={openCrossTeamDeps}
+          dayBriefLines={dayBriefLines}
+        />
+        <OutboundNudgeDraft
+          kpis={focusStats}
+          openCrossTeamDeps={openCrossTeamDeps}
+          dayBriefLines={dayBriefLines}
+        />
       </section>
 
       <div className="grid gap-8 lg:grid-cols-2">

@@ -73,7 +73,7 @@ function TopbarNavMenuButton() {
       return [{ href: "/my-view", label: "My View" }, ...tail];
     }
     if (canUseBusinessOs) {
-      return [{ href: "/workspace", label: "Business OS" }, ...tail];
+      return [{ href: "/workspace", label: "Overview" }, ...tail];
     }
     return [{ href: "/my-view", label: "My View" }, ...tail];
   }, [ready, canUseBusinessOs]);

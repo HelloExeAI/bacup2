@@ -20,6 +20,7 @@ import { INTERNATIONAL_DIAL_CODES, splitLegacyPhone } from "@/modules/settings/i
 import { DEEPGRAM_LANGUAGE_OPTIONS } from "@/modules/settings/deepgramLanguages";
 import { performAppSignOut } from "@/lib/auth/clientSignOut";
 import { BillingPage } from "@/modules/settings/billing/BillingPage";
+import { FollowAutomationTab } from "@/modules/settings/FollowAutomationTab";
 import { LocationTimezoneSection } from "@/modules/settings/LocationTimezoneSection";
 import { ProfileAvatarEditor } from "@/modules/settings/ProfileAvatarEditor";
 import type { ConnectedAccountRow, SettingsPayload, UserSettingsRow } from "@/modules/settings/types";
@@ -37,6 +38,7 @@ export type SettingsTabId =
   | "voice"
   | "notifications"
   | "integrations"
+  | "follow_automation"
   | "team"
   | "billing";
 
@@ -660,6 +662,7 @@ export function SettingsModal({
     { id: "voice", label: "Voice" },
     { id: "notifications", label: "Notifications" },
     { id: "integrations", label: "Integrations" },
+    { id: "follow_automation", label: "Follow automation" },
     { id: "team", label: "Team" },
     { id: "billing", label: "Billing" },
   ];
@@ -1249,6 +1252,8 @@ export function SettingsModal({
                   </div>
                 </div>
               </div>
+            ) : tab === "follow_automation" ? (
+              <FollowAutomationTab googleAccounts={googleAccounts} />
             ) : tab === "team" ? (
               <div className="space-y-4 text-sm">
                 <p className="text-xs text-muted-foreground">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Task } from "@/store/taskStore";
 import { scratchpadGmailHref } from "@/lib/tasks/scratchpadGmailHref";
 import { formatUpdatedByLine } from "@/lib/tasks/actorLabels";
+import { TaskFollowAutomationInline } from "@/modules/tasks/TaskFollowAutomationInline";
 import { isTaskOverdue, overdueAgingLabel } from "@/lib/tasks/taskOverdue";
 
 function typeLabel(type: string) {
@@ -224,6 +225,8 @@ export function TaskQuickDetailModal({
             </Link>
           </div>
         ) : null}
+
+        {!done ? <TaskFollowAutomationInline task={task} disabled={saving} /> : null}
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/60 pt-3">
           <button

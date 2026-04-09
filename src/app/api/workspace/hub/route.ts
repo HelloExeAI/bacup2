@@ -196,6 +196,18 @@ export async function GET() {
       console.warn("[workspace/hub] v2 bundle error", e);
     }
 
+    let followAutomation: { pendingApproval: number } = { pendingApproval: 0 };
+    try {
+      const { count } = await supabase
+        .from("follow_outbound_log")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "pending_approval");
+      followAutomation = { pendingApproval: typeof count === "number" ? count : 0 };
+    } catch {
+      /* migration not applied yet */
+    }
+
     return NextResponse.json({
       context: {
         workspaceOwnerId: ws,
@@ -216,6 +228,7 @@ export async function GET() {
       recognitions: hideRecognition ? [] : recRes.data ?? [],
       orgEdges: orgRes.data ?? [],
       v2,
+      followAutomation,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "hub_failed";

@@ -26,6 +26,8 @@ function newLocalId() {
 export function AskBacupDock() {
   const open = useAskBacupStore((s) => s.open);
   const setOpen = useAskBacupStore((s) => s.setOpen);
+  const draftMessage = useAskBacupStore((s) => s.draftMessage);
+  const setDraftMessage = useAskBacupStore((s) => s.setDraftMessage);
 
   const [threadId, setThreadId] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
@@ -160,6 +162,12 @@ export function AskBacupDock() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, setOpen]);
+
+  React.useEffect(() => {
+    if (!open || !draftMessage) return;
+    setInput(draftMessage);
+    setDraftMessage(null);
+  }, [open, draftMessage, setDraftMessage]);
 
   React.useEffect(() => {
     if (!scrollRef.current) return;
