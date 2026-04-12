@@ -1,4 +1,5 @@
 -- Phase C: Follow automation — rules, reminders, deadline tracking, audit log (email; WhatsApp later).
+-- If you change tables/indexes/RLS below, mirror the same DDL in 20260411170000_follow_reply_phase_d.sql (bootstrap block).
 
 create table if not exists public.workspace_follow_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
