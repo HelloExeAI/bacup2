@@ -687,30 +687,7 @@ export function WorkspaceHub() {
     };
   }, [loading, err, brief, openCrossTeamDepsCount]);
 
-  if (loading) {
-    return (
-      <div className="text-sm text-muted-foreground">Loading workspace…</div>
-    );
-  }
-
-  if (err) {
-    return (
-      <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-800 dark:text-red-200">
-        {err}
-      </div>
-    );
-  }
-
-  const focusStats = {
-    overdue: brief?.overdue ?? 0,
-    todaysLoad: brief?.todaysLoad ?? 0,
-    waitingFollowups: brief?.waitingFollowups ?? 0,
-    activePriorities: brief?.activePriorities ?? 0,
-    pendingDecisions: brief?.pendingDecisions ?? 0,
-  };
-
-  const openCrossTeamDeps = (v2Bundle.dependencies ?? []).filter((d) => d.status === "open").length;
-  const focusMotivation = motivationFromTodaysFocus(focusStats, openCrossTeamDeps);
+  // Hooks must run before any early return (loading/err); otherwise React #310.
   const todayYmd = React.useMemo(() => ymdToday(), []);
 
   const kpiTop5 = React.useMemo(() => {
@@ -749,6 +726,31 @@ export function WorkspaceHub() {
 
     return { overdue, todaysLoad, followups, priorities, pendingDecisions };
   }, [decisions, tasks, todayYmd]);
+
+  if (loading) {
+    return (
+      <div className="text-sm text-muted-foreground">Loading workspace…</div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+        {err}
+      </div>
+    );
+  }
+
+  const focusStats = {
+    overdue: brief?.overdue ?? 0,
+    todaysLoad: brief?.todaysLoad ?? 0,
+    waitingFollowups: brief?.waitingFollowups ?? 0,
+    activePriorities: brief?.activePriorities ?? 0,
+    pendingDecisions: brief?.pendingDecisions ?? 0,
+  };
+
+  const openCrossTeamDeps = (v2Bundle.dependencies ?? []).filter((d) => d.status === "open").length;
+  const focusMotivation = motivationFromTodaysFocus(focusStats, openCrossTeamDeps);
 
   return (
     <div className="space-y-8">
