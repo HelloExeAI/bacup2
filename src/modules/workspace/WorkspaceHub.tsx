@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { isTaskOverdue } from "@/lib/tasks/taskOverdue";
 import { useUserStore } from "@/store/userStore";
 import { useTaskStore } from "@/store/taskStore";
+import { useEventStore } from "@/store/eventStore";
 import type { SettingsPayload, TeamMemberSummary } from "@/modules/settings/types";
 import { useSettingsModal } from "@/modules/settings/SettingsProvider";
 import { FollowWithBacup } from "@/modules/workspace/FollowWithBacup";
 import { OutboundNudgeDraft } from "@/modules/workspace/OutboundNudgeDraft";
 import { WorkspaceOsV2, type WorkspaceV2Bundle } from "@/modules/workspace/WorkspaceOsV2";
 import { requestOverviewKpi, type OverviewKpiKind } from "@/modules/tasks/overviewKpiBus";
-import { ymdToday } from "@/modules/tasks/dayBriefing";
+import { buildTodayActionBriefLines, ymdToday } from "@/modules/tasks/dayBriefing";
 
 type HubContext = {
   workspaceOwnerId: string;
@@ -133,53 +134,6 @@ function overviewGreeting(profile: {
   return `${part}!`;
 }
 
-/** One energetic line tied to live KPIs (not generic fluff). */
-function motivationFromTodaysFocus(
-  stats: {
-    overdue: number;
-    todaysLoad: number;
-    waitingFollowups: number;
-    activePriorities: number;
-    pendingDecisions: number;
-  },
-  openCrossTeamDeps: number,
-): string {
-  const { overdue, todaysLoad, waitingFollowups, activePriorities, pendingDecisions } = stats;
-
-  if (overdue > 0) {
-    return overdue >= 8
-      ? "Overdue stack is real—take the oldest item first; momentum is your friend."
-      : "Overdue work is calling—clear one now before the pile grows.";
-  }
-  if (pendingDecisions > 0) {
-    return pendingDecisions >= 3
-      ? "Several decisions are waiting on you—one sharp call unlocks the whole team."
-      : "Leadership moment: a decision today beats a perfect one next week.";
-  }
-  if (openCrossTeamDeps > 0) {
-    return "Cross-team handoffs are open—nudge what you’re waiting on before dates slip.";
-  }
-  if (todaysLoad >= 5) {
-    return "Heavy due-today load—time-box the big rocks and protect focus time.";
-  }
-  if (todaysLoad >= 1) {
-    return "Execution mode—ship what’s due today and stay ahead of the clock.";
-  }
-  if (waitingFollowups > activePriorities && waitingFollowups >= 3) {
-    return "Follow-ups are outpacing new work—close loops so nothing boomerangs.";
-  }
-  if (activePriorities >= 4) {
-    return "Priorities are stacked—pick the one that moves revenue, risk, or people the most.";
-  }
-  if (waitingFollowups >= 2) {
-    return "Ops rhythm: your follow-ups keep promises and pipelines honest—keep swinging.";
-  }
-  if (activePriorities >= 2) {
-    return "Todo momentum—finish the next priority before the queue whispers louder.";
-  }
-  return "Clear runway—use the calm to get ahead or sharpen the next sprint.";
-}
-
 function healthDot(status: string): string {
   switch (status) {
     case "green":
@@ -197,6 +151,7 @@ export function WorkspaceHub() {
   const profile = useUserStore((s) => s.profile);
   const user = useUserStore((s) => s.user);
   const tasks = useTaskStore((s) => s.tasks);
+  const events = useEventStore((s) => s.events);
   const { openSettingsToTab } = useSettingsModal();
 
   const [loading, setLoading] = React.useState(true);
@@ -642,51 +597,6 @@ export function WorkspaceHub() {
     if (res.ok) void reload();
   };
 
-  const [dayBriefLines, setDayBriefLines] = React.useState<string[] | null>(null);
-  const [dayBriefLoading, setDayBriefLoading] = React.useState(false);
-
-  const openCrossTeamDepsCount = React.useMemo(
-    () => (v2Bundle.dependencies ?? []).filter((d) => d.status === "open").length,
-    [v2Bundle.dependencies],
-  );
-
-  React.useEffect(() => {
-    if (loading || err) return;
-
-    const kpis = brief ?? {
-      overdue: 0,
-      todaysLoad: 0,
-      waitingFollowups: 0,
-      activePriorities: 0,
-      pendingDecisions: 0,
-    };
-
-    let cancelled = false;
-    setDayBriefLoading(true);
-    void (async () => {
-      try {
-        const res = await fetch("/api/workspace/overview-brief", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ kpis, openCrossTeamDeps: openCrossTeamDepsCount }),
-        });
-        const j = (await res.json().catch(() => null)) as { lines?: unknown } | null;
-        const raw = Array.isArray(j?.lines) ? j.lines.map((x) => String(x)) : [];
-        if (cancelled) return;
-        setDayBriefLines(raw.length ? raw.slice(0, 5) : null);
-      } catch {
-        if (!cancelled) setDayBriefLines(null);
-      } finally {
-        if (!cancelled) setDayBriefLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loading, err, brief, openCrossTeamDepsCount]);
-
   // Hooks must run before any early return (loading/err); otherwise React #310.
   const todayYmd = React.useMemo(() => ymdToday(), []);
 
@@ -727,6 +637,11 @@ export function WorkspaceHub() {
     return { overdue, todaysLoad, followups, priorities, pendingDecisions };
   }, [decisions, tasks, todayYmd]);
 
+  const todayBriefLines = React.useMemo(
+    () => buildTodayActionBriefLines(tasks, events, todayYmd),
+    [tasks, events, todayYmd],
+  );
+
   if (loading) {
     return (
       <div className="text-sm text-muted-foreground">Loading workspace…</div>
@@ -750,7 +665,6 @@ export function WorkspaceHub() {
   };
 
   const openCrossTeamDeps = (v2Bundle.dependencies ?? []).filter((d) => d.status === "open").length;
-  const focusMotivation = motivationFromTodaysFocus(focusStats, openCrossTeamDeps);
 
   return (
     <div className="space-y-8">
@@ -770,7 +684,6 @@ export function WorkspaceHub() {
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-lg font-semibold tracking-tight text-foreground">{overviewGreeting(profile)}</p>
-            <p className="max-w-2xl text-sm leading-snug text-muted-foreground">{focusMotivation}</p>
           </div>
           <h2 id="today-focus-overview-heading" className="shrink-0 text-sm font-semibold text-foreground">
             Today&apos;s Focus
@@ -779,38 +692,10 @@ export function WorkspaceHub() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {(
             [
-              ["overdue", "Overdue", focusStats.overdue],
-              ["todaysLoad", "Today's load", focusStats.todaysLoad],
-              ["followups", "Follow-ups", focusStats.waitingFollowups],
-              ["priorities", "Priorities", focusStats.activePriorities],
-              ["pendingDecisions", "Approvals", focusStats.pendingDecisions ?? 0],
-            ] as const
-          ).map(([kind, label, v]) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => requestOverviewKpi(kind as OverviewKpiKind)}
-              className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-left shadow-sm transition-[box-shadow,transform] hover:bg-muted/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.99]"
-            >
-              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{v}</div>
-              <span className="sr-only">
-                {kind === "overdue" && "Open overdue tasks"}
-                {kind === "todaysLoad" && "Open tasks due today"}
-                {kind === "followups" && "Open follow-ups"}
-                {kind === "priorities" && "Open priority todos"}
-                {kind === "pendingDecisions" && "Scroll to approvals queue"}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {(
-            [
               {
-                kind: "overdue",
+                kind: "overdue" as const,
                 label: "Overdue",
+                count: focusStats.overdue,
                 items: kpiTop5.overdue.map((t) => ({
                   id: t.id,
                   title: t.title,
@@ -818,8 +703,9 @@ export function WorkspaceHub() {
                 })),
               },
               {
-                kind: "todaysLoad",
+                kind: "todaysLoad" as const,
                 label: "Today's load",
+                count: focusStats.todaysLoad,
                 items: kpiTop5.todaysLoad.map((t) => ({
                   id: t.id,
                   title: t.title,
@@ -827,8 +713,9 @@ export function WorkspaceHub() {
                 })),
               },
               {
-                kind: "followups",
+                kind: "followups" as const,
                 label: "Follow-ups",
+                count: focusStats.waitingFollowups,
                 items: kpiTop5.followups.map((t) => ({
                   id: t.id,
                   title: t.title,
@@ -836,8 +723,9 @@ export function WorkspaceHub() {
                 })),
               },
               {
-                kind: "priorities",
+                kind: "priorities" as const,
                 label: "Priorities",
+                count: focusStats.activePriorities,
                 items: kpiTop5.priorities.map((t) => ({
                   id: t.id,
                   title: t.title,
@@ -845,8 +733,9 @@ export function WorkspaceHub() {
                 })),
               },
               {
-                kind: "pendingDecisions",
+                kind: "pendingDecisions" as const,
                 label: "Approvals",
+                count: focusStats.pendingDecisions ?? 0,
                 items: approvals
                   .filter((a) => (a.status === "pending" || a.status === "needs_changes") && a.approver_user_id === user?.id)
                   .slice(0, 5)
@@ -869,54 +758,52 @@ export function WorkspaceHub() {
               key={card.kind}
               type="button"
               onClick={() => requestOverviewKpi(card.kind as OverviewKpiKind)}
-              className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-left shadow-sm transition-[box-shadow,transform] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.99]"
+              className="flex h-full min-h-[11rem] flex-col rounded-xl border border-border/70 bg-muted/25 px-3 py-3 text-left shadow-sm transition-[box-shadow,transform] hover:bg-muted/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.99]"
               aria-label={`Open ${card.label}`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Top 5 {card.label}
-                </div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{card.label}</div>
                 <span className="text-[11px] font-medium text-muted-foreground">Open</span>
               </div>
-              {card.items.length === 0 ? (
-                <div className="mt-2 text-xs text-muted-foreground">Nothing pending.</div>
-              ) : (
-                <ul className="mt-2 space-y-1">
-                  {card.items.slice(0, 5).map((it) => (
-                    <li key={it.id} className="min-w-0">
-                      <div className="truncate text-xs font-medium text-foreground">{it.title}</div>
-                      {it.meta ? <div className="truncate text-[10px] text-muted-foreground">{it.meta}</div> : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{card.count}</div>
+              <div className="mt-3 min-h-0 flex-1 border-t border-border/50 pt-2">
+                {card.items.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nothing pending.</p>
+                ) : (
+                  <ul className="max-h-40 space-y-1.5 overflow-y-auto pr-0.5">
+                    {card.items.slice(0, 5).map((it) => (
+                      <li key={it.id} className="min-w-0">
+                        <div className="truncate text-xs font-medium text-foreground">{it.title}</div>
+                        {it.meta ? <div className="truncate text-[10px] text-muted-foreground">{it.meta}</div> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </button>
           ))}
         </div>
 
         <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Day brief</h3>
-          {dayBriefLoading && !dayBriefLines?.length ? (
-            <p className="mt-2 text-xs text-muted-foreground">Drafting…</p>
-          ) : dayBriefLines && dayBriefLines.length > 0 ? (
-            <ul className="mt-2 list-none space-y-1.5 text-sm leading-snug text-foreground">
-              {dayBriefLines.map((line, i) => (
-                <li key={i}>{line}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">Brief unavailable.</p>
-          )}
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Today&apos;s briefing</h3>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Tasks due today, timed items, and calendar—no overdue summary.
+          </p>
+          <ul className="mt-2 list-none space-y-1.5 text-sm leading-snug text-foreground">
+            {todayBriefLines.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
         </div>
         <FollowWithBacup
           kpis={focusStats}
           openCrossTeamDeps={openCrossTeamDeps}
-          dayBriefLines={dayBriefLines}
+          dayBriefLines={todayBriefLines}
         />
         <OutboundNudgeDraft
           kpis={focusStats}
           openCrossTeamDeps={openCrossTeamDeps}
-          dayBriefLines={dayBriefLines}
+          dayBriefLines={todayBriefLines}
         />
       </section>
 

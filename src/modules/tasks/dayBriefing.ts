@@ -52,6 +52,69 @@ export function buildDayBriefInput(tasks: Task[], events: Event[]) {
   };
 }
 
+/** One line per timed or untimed item for today only (tasks due today + calendar); no overdue/backlog. */
+export function buildTodayActionBriefLines(
+  tasks: Task[],
+  events: Event[],
+  todayYmd: string,
+  opts?: { maxLines?: number },
+): string[] {
+  const maxLines = opts?.maxLines ?? 24;
+  const pendingToday = tasks.filter((t) => t.status === "pending" && t.due_date === todayYmd);
+  const calToday = events.filter((e) => e.date === todayYmd);
+
+  const toMinutes = (t: string | null | undefined): number | null => {
+    if (t == null || String(t).trim() === "") return null;
+    const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    const h = Math.min(23, parseInt(m[1], 10));
+    const min = Math.min(59, parseInt(m[2], 10));
+    return h * 60 + min;
+  };
+
+  const timeLabel = (mins: number | null) =>
+    mins == null ? "—" : `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+
+  type Row = { sort: number; line: string };
+  const rows: Row[] = [];
+
+  const baseUntimed = 24 * 60 + 10_000;
+
+  for (const e of calToday) {
+    const mins = toMinutes(e.time);
+    const sort = mins ?? baseUntimed;
+    const tl = timeLabel(mins);
+    rows.push({
+      sort,
+      line: `${tl} · ${(e.title ?? "Untitled event").trim() || "Untitled event"} · Calendar`,
+    });
+  }
+
+  for (const t of pendingToday) {
+    const mins = toMinutes(t.due_time);
+    const sort = mins ?? baseUntimed + 50_000;
+    const tl = mins == null ? "Today" : String(t.due_time ?? "").slice(0, 5);
+    const kind = t.type === "followup" ? "Follow-up" : t.type === "reminder" ? "Reminder" : "Todo";
+    rows.push({
+      sort,
+      line: `${tl} · ${t.title.trim() || "Untitled"} · ${kind}`,
+    });
+  }
+
+  rows.sort((a, b) => a.sort - b.sort || a.line.localeCompare(b.line));
+
+  if (rows.length === 0) {
+    return ["No tasks due today and no calendar events."];
+  }
+
+  const extra = rows.length - maxLines;
+  const out = rows.slice(0, maxLines).map((r) => r.line);
+  if (extra > 0) {
+    out.push(`…and ${extra} more today (open your task list or calendar for the full set).`);
+  }
+  return out;
+}
+
 export function fallbackDayBriefing(
   todayTasks: BriefTask[],
   todayEvents: BriefEvent[],
