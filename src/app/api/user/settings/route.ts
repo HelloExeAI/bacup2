@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { DEPARTMENT_LABEL, isWorkspaceDepartmentId } from "@/lib/workspace/departments";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTrustedDbClient } from "@/lib/supabase/service";
 import { normalizeUserSettingsRow } from "@/modules/settings/normalizeUserSettings";
@@ -217,12 +218,28 @@ async function buildSettingsPayloadWithDb(user: User, db: SupabaseClient): Promi
 
   const permMap = new Map(perms.map((p) => [p.team_member_id, p.can_view_dashboard_for_others]));
 
+  const deptLabelByMemberUserId = new Map<string, string>();
+  if (teamRows.length > 0) {
+    const assignRes = await db
+      .from("workspace_department_assignments")
+      .select("user_id, department")
+      .eq("workspace_owner_id", user.id);
+    if (!assignRes.error && assignRes.data) {
+      for (const row of assignRes.data) {
+        const uid = String((row as { user_id: string }).user_id);
+        const d = String((row as { department: string }).department);
+        if (isWorkspaceDepartmentId(d)) deptLabelByMemberUserId.set(uid, DEPARTMENT_LABEL[d]);
+      }
+    }
+  }
+
   const teamMembers = teamRows.map((r) => ({
     id: r.id,
     member_user_id: r.member_user_id,
     display_name: r.display_name,
     status: r.status,
     can_view_dashboard_for_others: Boolean(permMap.get(r.id)),
+    department: deptLabelByMemberUserId.get(String(r.member_user_id)) ?? null,
   }));
 
   return {

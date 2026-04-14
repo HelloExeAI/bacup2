@@ -20,6 +20,7 @@ import { INTERNATIONAL_DIAL_CODES, splitLegacyPhone } from "@/modules/settings/i
 import { DEEPGRAM_LANGUAGE_OPTIONS } from "@/modules/settings/deepgramLanguages";
 import { performAppSignOut } from "@/lib/auth/clientSignOut";
 import { BillingPage } from "@/modules/settings/billing/BillingPage";
+import { BusinessSetupTab } from "@/modules/settings/BusinessSetupTab";
 import { FollowAutomationTab } from "@/modules/settings/FollowAutomationTab";
 import { LocationTimezoneSection } from "@/modules/settings/LocationTimezoneSection";
 import { ProfileAvatarEditor } from "@/modules/settings/ProfileAvatarEditor";
@@ -39,7 +40,8 @@ export type SettingsTabId =
   | "notifications"
   | "integrations"
   | "follow_automation"
-  | "team"
+   | "team"
+  | "business_setup"
   | "billing";
 
 type TabId = SettingsTabId;
@@ -664,6 +666,7 @@ export function SettingsModal({
     { id: "integrations", label: "Integrations" },
     { id: "follow_automation", label: "Follow automation" },
     { id: "team", label: "Team" },
+    { id: "business_setup", label: "Business Setup" },
     { id: "billing", label: "Billing" },
   ];
 
@@ -1278,6 +1281,9 @@ export function SettingsModal({
                         <span className="font-medium text-foreground">{m.display_name || "Member"}</span>
                         <span className="text-muted-foreground">{m.member_user_id}</span>
                         <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{m.status}</span>
+                        {m.department ? (
+                          <span className="text-[10px] text-muted-foreground">{m.department}</span>
+                        ) : null}
                         {m.can_view_dashboard_for_others ? (
                           <span className="text-[10px] text-emerald-700 dark:text-emerald-400">dashboard share</span>
                         ) : null}
@@ -1291,6 +1297,8 @@ export function SettingsModal({
                   Team chat settings — configure shared channels and notifications (coming soon).
                 </div>
               </div>
+            ) : tab === "business_setup" ? (
+              <BusinessSetupTab />
             ) : (
               <BillingPage settings={settings} reloadSettings={load} flashSaveNotice={flashSaveNotice} />
             )

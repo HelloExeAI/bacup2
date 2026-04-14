@@ -8,6 +8,8 @@ export type DashboardViewOption = {
   user_id: string;
   label: string;
   kind: "self" | "team";
+  department?: string | null;
+  department_label?: string | null;
 };
 
 export type DashboardAccess = {

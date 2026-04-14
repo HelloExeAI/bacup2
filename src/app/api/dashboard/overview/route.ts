@@ -7,6 +7,8 @@ import {
   fetchDashboardViewOptions,
   type DashboardViewOption,
 } from "@/lib/supabase/queries";
+import { DEPARTMENT_LABEL, isWorkspaceDepartmentId } from "@/lib/workspace/departments";
+import { resolveWorkspaceContext } from "@/lib/workspace/resolveWorkspace";
 import type { Task } from "@/store/taskStore";
 import { isTaskOverdue } from "@/lib/tasks/taskOverdue";
 
@@ -54,7 +56,36 @@ export async function GET(req: Request) {
     }
 
     const access = await fetchDashboardViewOptions(supabase, user.id);
-    const options = access.options;
+    const ctx = await resolveWorkspaceContext(supabase, user.id);
+    const ws = ctx.workspaceOwnerId;
+
+    const deptByUser = new Map<string, string>();
+    try {
+      const { data: drows } = await supabase
+        .from("workspace_department_assignments")
+        .select("user_id, department")
+        .eq("workspace_owner_id", ws);
+      for (const r of drows ?? []) {
+        const uid = String((r as { user_id: string }).user_id);
+        const d = String((r as { department: string }).department);
+        if (isWorkspaceDepartmentId(d)) deptByUser.set(uid, d);
+      }
+    } catch {
+      /* migration not applied */
+    }
+
+    const options: DashboardViewOption[] = access.options.map((o) => {
+      const raw = deptByUser.get(o.user_id) ?? null;
+      const d = raw && isWorkspaceDepartmentId(raw) ? raw : null;
+      const department_label = d ? DEPARTMENT_LABEL[d] : null;
+      return {
+        ...o,
+        department: d,
+        department_label,
+        label: department_label ? `${o.label} · ${department_label}` : o.label,
+      };
+    });
+
     const allowedOptionIds = new Set(options.map((o) => o.user_id));
     const requestedViewUserId = parsed.data.view_user_id ?? user.id;
     const selectedViewUserId = allowedOptionIds.has(requestedViewUserId)

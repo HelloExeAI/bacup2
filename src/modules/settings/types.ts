@@ -55,6 +55,8 @@ export type TeamMemberSummary = {
   display_name: string | null;
   status: string;
   can_view_dashboard_for_others: boolean;
+  /** Human-readable department (e.g. "Sales") when assigned in Business Setup. */
+  department: string | null;
 };
 
 export type SettingsPayload = {

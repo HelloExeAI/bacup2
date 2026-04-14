@@ -54,6 +54,7 @@ function IconTrash() {
 export function KpiActionModal({
   open,
   title,
+  subtitle,
   tasks,
   onClose,
   onSelectTask,
@@ -71,6 +72,8 @@ export function KpiActionModal({
 }: {
   open: boolean;
   title: string;
+  /** e.g. cockpit view label with department */
+  subtitle?: string | null;
   tasks: Task[];
   onClose: () => void;
   onSelectTask: (t: Task) => void;
@@ -110,6 +113,9 @@ export function KpiActionModal({
         <div className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-3">
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-foreground">{title}</div>
+            {subtitle ? (
+              <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
+            ) : null}
             <div className="text-[11px] text-muted-foreground">{tasks.length} items</div>
           </div>
           <button

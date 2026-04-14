@@ -15,6 +15,7 @@ import { OutboundNudgeDraft } from "@/modules/workspace/OutboundNudgeDraft";
 import { WorkspaceOsV2, type WorkspaceV2Bundle } from "@/modules/workspace/WorkspaceOsV2";
 import { requestOverviewKpi, type OverviewKpiKind } from "@/modules/tasks/overviewKpiBus";
 import { buildTodayActionBriefLines, ymdToday } from "@/modules/tasks/dayBriefing";
+import { formatPersonWithDepartment } from "@/lib/workspace/departments";
 
 type HubContext = {
   workspaceOwnerId: string;
@@ -165,6 +166,7 @@ export function WorkspaceHub() {
   const [recognitions, setRecognitions] = React.useState<RecRow[]>([]);
   const [orgEdges, setOrgEdges] = React.useState<OrgEdge[]>([]);
   const [team, setTeam] = React.useState<TeamMemberSummary[]>([]);
+  const [departmentByUserId, setDepartmentByUserId] = React.useState<Record<string, string>>({});
   const [v2Bundle, setV2Bundle] = React.useState<WorkspaceV2Bundle>({
     playbookTemplates: [],
     playbookRuns: [],
@@ -199,6 +201,12 @@ export function WorkspaceHub() {
       }
       const c = hubJson?.context as HubContext | undefined;
       if (c) setCtx(c);
+      const rawDept = hubJson?.departmentByUserId;
+      setDepartmentByUserId(
+        rawDept && typeof rawDept === "object" && !Array.isArray(rawDept)
+          ? (rawDept as Record<string, string>)
+          : {},
+      );
       setBrief((hubJson?.morningBrief as Record<string, number>) ?? null);
       setDecisions((hubJson?.decisions as DecisionRow[]) ?? []);
       setProjects((hubJson?.projects as ProjectRow[]) ?? []);
@@ -351,6 +359,9 @@ export function WorkspaceHub() {
     const row = team.find((t) => t.member_user_id === uid);
     return row?.display_name?.trim() || uid.slice(0, 8) + "…";
   };
+
+  const personLabel = (uid: string) =>
+    formatPersonWithDepartment(displayName(uid), departmentByUserId[uid] ?? null);
 
   const defaultApproverId = React.useMemo(() => {
     const uid = user?.id;
@@ -838,8 +849,8 @@ export function WorkspaceHub() {
                             a.template_type,
                             money ?? "",
                             neededBy ? `needed by ${neededBy}` : "",
-                            isMine ? "requested by you" : `requester ${displayName(a.requester_user_id)}`,
-                            isInbox ? "to you" : `approver ${displayName(a.approver_user_id)}`,
+                            isMine ? "requested by you" : `requester ${personLabel(a.requester_user_id)}`,
+                            isInbox ? "to you" : `approver ${personLabel(a.approver_user_id)}`,
                           ]
                             .filter(Boolean)
                             .join(" · ")}
@@ -984,7 +995,7 @@ export function WorkspaceHub() {
                         <option value="">Select</option>
                         {memberIds.map((id) => (
                           <option key={id} value={id}>
-                            {displayName(id)}
+                            {personLabel(id)}
                             {id === defaultApproverId ? " (default)" : ""}
                           </option>
                         ))}
@@ -1212,6 +1223,17 @@ export function WorkspaceHub() {
             <p className="text-xs text-muted-foreground">
               Optional secondary reporting lines. Add who reports to whom in your workspace.
             </p>
+            <p className="text-xs text-muted-foreground">
+              Department mapping (Revenue / Support) lives in{" "}
+              <button
+                type="button"
+                className="font-medium text-foreground underline underline-offset-2 hover:opacity-90"
+                onClick={() => openSettingsToTab("business_setup")}
+              >
+                Settings → Business Setup
+              </button>
+              .
+            </p>
             {orgEdges.length === 0 ? (
               <p className="text-xs text-muted-foreground">No edges yet.</p>
             ) : (
@@ -1219,7 +1241,7 @@ export function WorkspaceHub() {
                 {orgEdges.map((e) => (
                   <li key={e.id} className="flex items-center justify-between gap-2 rounded border border-border/50 px-2 py-1">
                     <span>
-                      {displayName(e.report_user_id)} → {displayName(e.manager_user_id)}
+                      {personLabel(e.report_user_id)} → {personLabel(e.manager_user_id)}
                       {e.relation_rank > 1 ? ` (alt ${e.relation_rank})` : ""}
                     </span>
                     <button type="button" className="text-red-600 hover:underline" onClick={() => void deleteOrg(e.id)}>
@@ -1240,7 +1262,7 @@ export function WorkspaceHub() {
                   <option value="">Select</option>
                   {memberIds.map((id) => (
                     <option key={id} value={id}>
-                      {displayName(id)}
+                      {personLabel(id)}
                     </option>
                   ))}
                 </select>
@@ -1255,7 +1277,7 @@ export function WorkspaceHub() {
                   <option value="">Select</option>
                   {memberIds.map((id) => (
                     <option key={id} value={id}>
-                      {displayName(id)}
+                      {personLabel(id)}
                     </option>
                   ))}
                 </select>
@@ -1275,7 +1297,7 @@ export function WorkspaceHub() {
               <ul className="text-[11px] text-muted-foreground">
                 {eaPolicies.map((p) => (
                   <li key={String(p.ea_user_id)}>
-                    EA {displayName(String(p.ea_user_id))}: decisions {String(p.can_view_decisions)}, projects{" "}
+                    EA {personLabel(String(p.ea_user_id))}: decisions {String(p.can_view_decisions)}, projects{" "}
                     {String(p.can_view_projects)}
                   </li>
                 ))}
@@ -1293,7 +1315,7 @@ export function WorkspaceHub() {
                   .filter((id) => id !== user?.id)
                   .map((id) => (
                     <option key={id} value={id}>
-                      {displayName(id)}
+                      {personLabel(id)}
                     </option>
                   ))}
               </select>
@@ -1359,9 +1381,9 @@ export function WorkspaceHub() {
               <ul className="space-y-2">
                 {recognitions.map((r) => (
                   <li key={r.id} className="rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-sm shadow-sm">
-                    <span className="font-medium text-foreground">{displayName(r.from_user_id)}</span>
+                    <span className="font-medium text-foreground">{personLabel(r.from_user_id)}</span>
                     <span className="text-muted-foreground"> → </span>
-                    <span className="font-medium text-foreground">{displayName(r.to_user_id)}</span>
+                    <span className="font-medium text-foreground">{personLabel(r.to_user_id)}</span>
                     <p className="mt-1 text-xs text-foreground/90">{r.message}</p>
                   </li>
                 ))}
@@ -1379,7 +1401,7 @@ export function WorkspaceHub() {
                   .filter((id) => id !== user?.id)
                   .map((id) => (
                     <option key={id} value={id}>
-                      {displayName(id)}
+                      {personLabel(id)}
                     </option>
                   ))}
               </select>

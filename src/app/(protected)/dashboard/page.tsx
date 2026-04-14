@@ -393,6 +393,7 @@ export default function DashboardPage() {
       <KpiActionModal
         open={!!kpiOpen}
         title={kpiOpen ? kpiTitle(kpiOpen) : "Actions"}
+        subtitle={kpiOpen && selectedView ? `View · ${selectedView.label}` : null}
         tasks={kpiTasks}
         onClose={() => setKpiOpen(null)}
         savingId={savingId}

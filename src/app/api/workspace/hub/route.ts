@@ -223,6 +223,21 @@ export async function GET() {
       /* migration not applied yet */
     }
 
+    let departmentByUserId: Record<string, string> = {};
+    try {
+      const { data: deptRows, error: deptErr } = await supabase
+        .from("workspace_department_assignments")
+        .select("user_id, department")
+        .eq("workspace_owner_id", ws);
+      if (!deptErr && deptRows) {
+        departmentByUserId = Object.fromEntries(
+          deptRows.map((r) => [String((r as { user_id: string }).user_id), String((r as { department: string }).department)]),
+        );
+      }
+    } catch {
+      departmentByUserId = {};
+    }
+
     return NextResponse.json({
       context: {
         workspaceOwnerId: ws,
@@ -244,6 +259,7 @@ export async function GET() {
       orgEdges: orgRes.data ?? [],
       v2,
       followAutomation,
+      departmentByUserId,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "hub_failed";
