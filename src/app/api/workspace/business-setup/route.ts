@@ -10,6 +10,21 @@ import { resolveWorkspaceContext } from "@/lib/workspace/resolveWorkspace";
 
 export const dynamic = "force-dynamic";
 
+/** Supabase/PostgREST errors are plain objects with `message`, not `Error` instances. */
+function errorMessageFromUnknown(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const o = e as Record<string, unknown>;
+    const msg = o.message;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+    const details = o.details;
+    if (typeof details === "string" && details.trim()) return details.trim();
+    const hint = o.hint;
+    if (typeof hint === "string" && hint.trim()) return hint.trim();
+  }
+  return "Unknown error";
+}
+
 const AssignmentSchema = z.object({
   user_id: z.string().uuid(),
   department: z.string(),
@@ -171,7 +186,8 @@ export async function GET() {
       people,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "failed";
+    const msg = errorMessageFromUnknown(e);
+    console.error("[business-setup GET]", e);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
@@ -269,7 +285,8 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "failed";
+    const msg = errorMessageFromUnknown(e);
+    console.error("[business-setup PATCH]", e);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

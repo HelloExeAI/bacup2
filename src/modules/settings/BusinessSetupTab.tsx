@@ -42,7 +42,7 @@ export function BusinessSetupTab() {
     setNotice(null);
     try {
       const res = await fetch("/api/workspace/business-setup", { credentials: "include" });
-      const j = (await res.json().catch(() => null)) as GetPayload & { error?: string };
+      const j = (await res.json().catch(() => null)) as GetPayload & { error?: string; details?: string };
       if (!res.ok) {
         const code = j?.error;
         if (res.status === 403 && code === "business_os_not_entitled") {
@@ -50,7 +50,10 @@ export function BusinessSetupTab() {
           setPayload(null);
           return;
         }
-        throw new Error(typeof code === "string" ? code : "Failed to load");
+        const detail = typeof j?.details === "string" && j.details.trim() ? ` ${j.details.trim()}` : "";
+        throw new Error(
+          typeof code === "string" && code.trim() ? `${code.trim()}${detail}` : `Failed to load (${res.status})${detail}`,
+        );
       }
       setPayload(j);
       const d: Record<string, WorkspaceDepartmentId> = {};
