@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isDeveloperEmail } from "@/lib/auth/developerAccess";
 import { canUseAskBacup, coerceBacupTierId } from "@/lib/billing/bacupTiers";
 
 export type AskBacupAuthOk = { userId: string; supabase: SupabaseClient };
@@ -17,6 +18,10 @@ export async function requireAskBacupAccess(
   } = await supabase.auth.getUser();
   if (!user) {
     return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  if (isDeveloperEmail(user.email)) {
+    return { userId: user.id, supabase };
   }
 
   const { data: askEnt, error: askEntErr } = await supabase

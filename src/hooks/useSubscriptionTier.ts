@@ -4,7 +4,8 @@ import * as React from "react";
 
 import type { BacupTierId } from "@/lib/billing/bacupTiers";
 import { coerceBacupTierId } from "@/lib/billing/bacupTiers";
-import { canUseBusinessOs } from "@/lib/billing/businessOsAccess";
+import { canUseBusinessOsOrDeveloper } from "@/lib/billing/businessOsAccess";
+import { useUserStore } from "@/store/userStore";
 
 type State = {
   tier: BacupTierId;
@@ -16,6 +17,7 @@ type State = {
  */
 export function useSubscriptionTier(): State & { canUseBusinessOs: boolean } {
   const [state, setState] = React.useState<State>({ tier: "solo_os", ready: false });
+  const sessionEmail = useUserStore((s) => s.user?.email ?? null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -36,6 +38,6 @@ export function useSubscriptionTier(): State & { canUseBusinessOs: boolean } {
 
   return {
     ...state,
-    canUseBusinessOs: state.ready && canUseBusinessOs(state.tier),
+    canUseBusinessOs: state.ready && canUseBusinessOsOrDeveloper(state.tier, sessionEmail),
   };
 }

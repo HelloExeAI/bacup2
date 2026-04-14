@@ -90,6 +90,63 @@ async function fetchActiveTeamForOwner(db: SupabaseClient, workspaceOwnerId: str
   return data ?? [];
 }
 
+function hasServiceRoleConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+}
+
+/**
+ * Without the service role key, `getTrustedDbClient` uses the user session, and RLS only allows
+ * reading your own `profiles` row — bulk `.in("id", roster)` fails with permission denied.
+ */
+async function buildRosterDisplayLabels(
+  sessionClient: SupabaseClient,
+  db: SupabaseClient,
+  rosterUserIds: string[],
+  workspaceOwnerId: string,
+  teamRows: Awaited<ReturnType<typeof fetchActiveTeamForOwner>>,
+  viewerUserId: string,
+): Promise<Map<string, string>> {
+  const labels = new Map<string, string>();
+
+  for (const row of teamRows) {
+    const mid = String(row.member_user_id);
+    const dn = typeof row.display_name === "string" ? row.display_name.trim() : "";
+    if (dn) labels.set(mid, dn);
+  }
+
+  if (hasServiceRoleConfigured()) {
+    const { data: profiles, error } = await db
+      .from("profiles")
+      .select("id, name, first_name, last_name, display_name")
+      .in("id", rosterUserIds);
+    if (error) {
+      console.warn("[business-setup] service-role profile batch failed (check key matches project URL):", errorMessageFromUnknown(error));
+    } else if (profiles?.length) {
+      for (const p of profiles) {
+        labels.set(String(p.id), profileDisplayName(p));
+      }
+    }
+  }
+
+  // RLS-safe: founder can always read their own profile (covers missing/wrong service role on Vercel).
+  if (viewerUserId === workspaceOwnerId && !labels.has(workspaceOwnerId)) {
+    const { data: founderProf } = await sessionClient
+      .from("profiles")
+      .select("id, name, first_name, last_name, display_name")
+      .eq("id", workspaceOwnerId)
+      .maybeSingle();
+    if (founderProf) labels.set(workspaceOwnerId, profileDisplayName(founderProf));
+  }
+
+  for (const uid of rosterUserIds) {
+    if (!labels.has(uid)) {
+      labels.set(uid, uid === workspaceOwnerId ? "Workspace owner" : "Member");
+    }
+  }
+
+  return labels;
+}
+
 export async function GET() {
   try {
     const supabase = await createSupabaseServerClient();
@@ -125,12 +182,7 @@ export async function GET() {
     }
 
     const ids = Array.from(rosterIds);
-    const { data: profiles, error: pErr } = await db
-      .from("profiles")
-      .select("id, name, first_name, last_name, display_name")
-      .in("id", ids);
-    if (pErr) throw pErr;
-    const profileById = new Map((profiles ?? []).map((p) => [String(p.id), p]));
+    const labelByUserId = await buildRosterDisplayLabels(supabase, db, ids, ws, teamRows, user.id);
 
     const permByMemberId = new Map<string, boolean>();
     const teamIds = teamRows.map((r) => r.id).filter(Boolean);
@@ -151,8 +203,7 @@ export async function GET() {
     const isFounderViewer = ctx.isFounder;
 
     const people = ids.map((uid) => {
-      const prof = profileById.get(uid);
-      const label = prof ? profileDisplayName(prof) : "Member";
+      const label = labelByUserId.get(uid) ?? "Member";
       if (uid === ws) {
         return {
           user_id: uid,

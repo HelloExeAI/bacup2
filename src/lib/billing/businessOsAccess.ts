@@ -1,12 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+import { isDeveloperEmail } from "@/lib/auth/developerAccess";
 import type { BacupTierId } from "@/lib/billing/bacupTiers";
 import { coerceBacupTierId } from "@/lib/billing/bacupTiers";
 
 /** Business OS (workspace hub, org, EA policies, etc.) ships with Executive OS. */
 export function canUseBusinessOs(tier: BacupTierId): boolean {
   return tier === "executive_os";
+}
+
+/** Executive tier or developer bypass (server/client: pass session email when known). */
+export function canUseBusinessOsOrDeveloper(tier: BacupTierId, email: string | null | undefined): boolean {
+  return canUseBusinessOs(tier) || isDeveloperEmail(email);
 }
 
 export async function getSubscriptionTierForUser(
@@ -27,6 +33,13 @@ export async function businessOsForbiddenIfNeeded(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<NextResponse | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user?.id === userId && isDeveloperEmail(user.email)) {
+    return null;
+  }
+
   const tier = await getSubscriptionTierForUser(supabase, userId);
   if (canUseBusinessOs(tier)) return null;
   return NextResponse.json(

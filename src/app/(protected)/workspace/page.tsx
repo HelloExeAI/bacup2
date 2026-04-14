@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { canUseBusinessOs } from "@/lib/billing/businessOsAccess";
+import { canUseBusinessOsOrDeveloper } from "@/lib/billing/businessOsAccess";
 import { coerceBacupTierId } from "@/lib/billing/bacupTiers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { WorkspaceHub } from "@/modules/workspace/WorkspaceHub";
@@ -19,7 +19,7 @@ export default async function WorkspacePage() {
     .maybeSingle();
 
   const tier = coerceBacupTierId(data?.subscription_tier);
-  if (!canUseBusinessOs(tier)) redirect("/my-view");
+  if (!canUseBusinessOsOrDeveloper(tier, user.email)) redirect("/my-view");
 
   return <WorkspaceHub />;
 }

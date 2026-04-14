@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { canUseBusinessOs } from "@/lib/billing/businessOsAccess";
+import { canUseBusinessOsOrDeveloper } from "@/lib/billing/businessOsAccess";
 import { coerceBacupTierId } from "@/lib/billing/bacupTiers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -21,5 +21,5 @@ export default async function StartPage() {
     .maybeSingle();
 
   const tier = coerceBacupTierId(data?.subscription_tier);
-  redirect(canUseBusinessOs(tier) ? "/workspace" : "/my-view");
+  redirect(canUseBusinessOsOrDeveloper(tier, user.email) ? "/workspace" : "/my-view");
 }
