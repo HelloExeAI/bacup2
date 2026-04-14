@@ -2,11 +2,17 @@
 
 export const REVENUE_DEPARTMENTS = ["operations", "sales", "marketing"] as const;
 export const SUPPORT_DEPARTMENTS = ["people", "finance", "admin", "it"] as const;
+/** Leadership / exec titles mapped like departments in Business Setup (not the same as workspace owner). */
+export const MANAGEMENT_DEPARTMENTS = ["founder", "cofounder", "ceo"] as const;
 
-export const WORKSPACE_DEPARTMENTS = [...REVENUE_DEPARTMENTS, ...SUPPORT_DEPARTMENTS] as const;
+export const WORKSPACE_DEPARTMENTS = [
+  ...REVENUE_DEPARTMENTS,
+  ...SUPPORT_DEPARTMENTS,
+  ...MANAGEMENT_DEPARTMENTS,
+] as const;
 
 export type WorkspaceDepartmentId = (typeof WORKSPACE_DEPARTMENTS)[number];
-export type WorkspaceVerticalId = "revenue" | "support";
+export type WorkspaceVerticalId = "revenue" | "support" | "management";
 
 export const DEPARTMENT_VERTICAL: Record<WorkspaceDepartmentId, WorkspaceVerticalId> = {
   operations: "revenue",
@@ -16,6 +22,9 @@ export const DEPARTMENT_VERTICAL: Record<WorkspaceDepartmentId, WorkspaceVertica
   finance: "support",
   admin: "support",
   it: "support",
+  founder: "management",
+  cofounder: "management",
+  ceo: "management",
 };
 
 export const DEPARTMENT_LABEL: Record<WorkspaceDepartmentId, string> = {
@@ -26,11 +35,15 @@ export const DEPARTMENT_LABEL: Record<WorkspaceDepartmentId, string> = {
   finance: "Finance",
   admin: "Admin",
   it: "IT",
+  founder: "Founder",
+  cofounder: "Cofounder",
+  ceo: "CEO",
 };
 
 export const VERTICAL_LABEL: Record<WorkspaceVerticalId, string> = {
   revenue: "Revenue",
   support: "Support",
+  management: "Management",
 };
 
 const DEPT_SET = new Set<string>(WORKSPACE_DEPARTMENTS);

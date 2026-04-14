@@ -6,8 +6,10 @@ import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import {
   DEPARTMENT_LABEL,
+  MANAGEMENT_DEPARTMENTS,
   REVENUE_DEPARTMENTS,
   SUPPORT_DEPARTMENTS,
+  WORKSPACE_DEPARTMENTS,
   type WorkspaceDepartmentId,
 } from "@/lib/workspace/departments";
 
@@ -146,9 +148,9 @@ export function BusinessSetupTab() {
   return (
     <div className="space-y-4 text-sm">
       <p className="text-xs text-muted-foreground">
-        Map everyone in your workspace to a department under <span className="font-medium">Revenue</span> or{" "}
-        <span className="font-medium">Support</span>. This drives labels in the cockpit, workspace hub, and team
-        settings.
+        Map everyone in your workspace to a department under <span className="font-medium">Revenue</span>,{" "}
+        <span className="font-medium">Support</span>, or <span className="font-medium">Management</span>. This drives
+        labels in the cockpit, workspace hub, and team settings.
       </p>
 
       <div className="rounded-lg border border-[#E0DDD6] bg-white/50 px-3 py-2 text-xs dark:border-[hsl(35_10%_28%)] dark:bg-black/20">
@@ -156,6 +158,7 @@ export function BusinessSetupTab() {
         <ul className="mt-1 list-inside list-disc text-muted-foreground">
           <li>Revenue — Operations, Sales, Marketing</li>
           <li>Support — People, Finance, Admin, IT</li>
+          <li>Management — Founder, Cofounder, CEO</li>
         </ul>
       </div>
 
@@ -186,7 +189,7 @@ export function BusinessSetupTab() {
             <div className="min-w-0">
               <div className="font-medium text-foreground">{row.label}</div>
               {row.user_id === payload.workspace_owner_id ? (
-                <div className="text-[10px] text-muted-foreground">Founder</div>
+                <div className="text-[10px] text-muted-foreground">Workspace owner</div>
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -228,6 +231,13 @@ export function BusinessSetupTab() {
                       </option>
                     ))}
                   </optgroup>
+                  <optgroup label="Management">
+                    {MANAGEMENT_DEPARTMENTS.map((id) => (
+                      <option key={id} value={id}>
+                        {DEPARTMENT_LABEL[id]}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               ) : (
                 <span className="text-muted-foreground">
@@ -249,7 +259,5 @@ export function BusinessSetupTab() {
 }
 
 function isDept(v: string): v is WorkspaceDepartmentId {
-  return (
-    (REVENUE_DEPARTMENTS as readonly string[]).includes(v) || (SUPPORT_DEPARTMENTS as readonly string[]).includes(v)
-  );
+  return (WORKSPACE_DEPARTMENTS as readonly string[]).includes(v);
 }
