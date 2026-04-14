@@ -5,7 +5,6 @@ import { z } from "zod";
 import { businessOsForbiddenIfNeeded } from "@/lib/billing/businessOsAccess";
 import { isWorkspaceDepartmentId, type WorkspaceDepartmentId } from "@/lib/workspace/departments";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getTrustedDbClient } from "@/lib/supabase/service";
 import { resolveWorkspaceContext } from "@/lib/workspace/resolveWorkspace";
 
 export const dynamic = "force-dynamic";
@@ -90,17 +89,12 @@ async function fetchActiveTeamForOwner(db: SupabaseClient, workspaceOwnerId: str
   return data ?? [];
 }
 
-function hasServiceRoleConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
-}
-
 /**
- * Without the service role key, `getTrustedDbClient` uses the user session, and RLS only allows
- * reading your own `profiles` row — bulk `.in("id", roster)` fails with permission denied.
+ * Display labels without bulk-reading other users' profiles (RLS). Uses `team_members.display_name`
+ * and the founder's own `profiles` row when the viewer is the founder.
  */
 async function buildRosterDisplayLabels(
-  sessionClient: SupabaseClient,
-  db: SupabaseClient,
+  supabase: SupabaseClient,
   rosterUserIds: string[],
   workspaceOwnerId: string,
   teamRows: Awaited<ReturnType<typeof fetchActiveTeamForOwner>>,
@@ -114,23 +108,8 @@ async function buildRosterDisplayLabels(
     if (dn) labels.set(mid, dn);
   }
 
-  if (hasServiceRoleConfigured()) {
-    const { data: profiles, error } = await db
-      .from("profiles")
-      .select("id, name, first_name, last_name, display_name")
-      .in("id", rosterUserIds);
-    if (error) {
-      console.warn("[business-setup] service-role profile batch failed (check key matches project URL):", errorMessageFromUnknown(error));
-    } else if (profiles?.length) {
-      for (const p of profiles) {
-        labels.set(String(p.id), profileDisplayName(p));
-      }
-    }
-  }
-
-  // RLS-safe: founder can always read their own profile (covers missing/wrong service role on Vercel).
-  if (viewerUserId === workspaceOwnerId && !labels.has(workspaceOwnerId)) {
-    const { data: founderProf } = await sessionClient
+  if (viewerUserId === workspaceOwnerId) {
+    const { data: founderProf } = await supabase
       .from("profiles")
       .select("id, name, first_name, last_name, display_name")
       .eq("id", workspaceOwnerId)
@@ -163,12 +142,13 @@ export async function GET() {
 
     const ctx = await resolveWorkspaceContext(supabase, user.id);
     const ws = ctx.workspaceOwnerId;
-    const db = getTrustedDbClient(supabase);
 
-    const teamRows = await fetchActiveTeamForOwner(db, ws);
+    // Session client only: a wrong/missing service-role secret must not turn this into an anonymous
+    // PostgREST client (auth.uid() null → "permission denied for schema public").
+    const teamRows = await fetchActiveTeamForOwner(supabase, ws);
     const rosterIds = new Set<string>([ws, ...teamRows.map((r) => String(r.member_user_id))]);
 
-    const { data: assignRows, error: aErr } = await db
+    const { data: assignRows, error: aErr } = await supabase
       .from("workspace_department_assignments")
       .select("user_id, department")
       .eq("workspace_owner_id", ws);
@@ -182,12 +162,12 @@ export async function GET() {
     }
 
     const ids = Array.from(rosterIds);
-    const labelByUserId = await buildRosterDisplayLabels(supabase, db, ids, ws, teamRows, user.id);
+    const labelByUserId = await buildRosterDisplayLabels(supabase, ids, ws, teamRows, user.id);
 
     const permByMemberId = new Map<string, boolean>();
     const teamIds = teamRows.map((r) => r.id).filter(Boolean);
     if (teamIds.length > 0) {
-      const { data: perms } = await db
+      const { data: perms } = await supabase
         .from("team_member_permissions")
         .select("team_member_id, can_manage_business_setup")
         .in("team_member_id", teamIds);
@@ -199,7 +179,7 @@ export async function GET() {
       }
     }
 
-    const canEdit = await viewerCanManageBusinessSetup(db, user.id, ws);
+    const canEdit = await viewerCanManageBusinessSetup(supabase, user.id, ws);
     const isFounderViewer = ctx.isFounder;
 
     const people = ids.map((uid) => {
@@ -259,9 +239,8 @@ export async function PATCH(req: Request) {
 
     const ctx = await resolveWorkspaceContext(supabase, user.id);
     const ws = ctx.workspaceOwnerId;
-    const db = getTrustedDbClient(supabase);
 
-    const canEdit = await viewerCanManageBusinessSetup(db, user.id, ws);
+    const canEdit = await viewerCanManageBusinessSetup(supabase, user.id, ws);
     if (!canEdit) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -272,7 +251,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Invalid body", details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const teamRows = await fetchActiveTeamForOwner(db, ws);
+    const teamRows = await fetchActiveTeamForOwner(supabase, ws);
     const roster = new Set<string>([ws, ...teamRows.map((r) => String(r.member_user_id))]);
 
     const incomingIds = new Set(parsed.data.assignments.map((a) => a.user_id));
@@ -305,19 +284,19 @@ export async function PATCH(req: Request) {
         if (!tm?.id) {
           return NextResponse.json({ error: "Unknown team member for setup_permissions" }, { status: 400 });
         }
-        const { data: existing } = await db
+        const { data: existing } = await supabase
           .from("team_member_permissions")
           .select("team_member_id")
           .eq("team_member_id", tm.id)
           .maybeSingle();
         if (existing) {
-          const { error: upErr } = await db
+          const { error: upErr } = await supabase
             .from("team_member_permissions")
             .update({ can_manage_business_setup: sp.can_manage_business_setup })
             .eq("team_member_id", tm.id);
           if (upErr) throw upErr;
         } else {
-          const { error: insErr } = await db.from("team_member_permissions").insert({
+          const { error: insErr } = await supabase.from("team_member_permissions").insert({
             team_member_id: tm.id,
             can_manage_business_setup: sp.can_manage_business_setup,
           });
@@ -326,11 +305,14 @@ export async function PATCH(req: Request) {
       }
     }
 
-    const { error: delErr } = await db.from("workspace_department_assignments").delete().eq("workspace_owner_id", ws);
+    const { error: delErr } = await supabase
+      .from("workspace_department_assignments")
+      .delete()
+      .eq("workspace_owner_id", ws);
     if (delErr) throw delErr;
 
     if (rows.length > 0) {
-      const { error: insErr } = await db.from("workspace_department_assignments").insert(rows);
+      const { error: insErr } = await supabase.from("workspace_department_assignments").insert(rows);
       if (insErr) throw insErr;
     }
 
