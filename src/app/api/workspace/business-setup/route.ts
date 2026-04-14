@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { businessOsForbiddenIfNeeded } from "@/lib/billing/businessOsAccess";
 import { isWorkspaceDepartmentId, type WorkspaceDepartmentId } from "@/lib/workspace/departments";
+import { capturePostHogServerEvent } from "@/lib/posthog-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveWorkspaceContext } from "@/lib/workspace/resolveWorkspace";
 
@@ -127,6 +128,7 @@ async function buildRosterDisplayLabels(
 }
 
 export async function GET() {
+  let viewerId: string | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const {
@@ -136,6 +138,7 @@ export async function GET() {
     if (userErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    viewerId = user.id;
 
     const denied = await businessOsForbiddenIfNeeded(supabase, user.id);
     if (denied) return denied;
@@ -219,11 +222,20 @@ export async function GET() {
   } catch (e) {
     const msg = errorMessageFromUnknown(e);
     console.error("[business-setup GET]", e);
+    if (viewerId) {
+      void capturePostHogServerEvent(viewerId, "business_setup_api_error", {
+        method: "GET",
+        http_status: 500,
+        error_message: msg,
+        route: "/api/workspace/business-setup",
+      });
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
 export async function PATCH(req: Request) {
+  let viewerId: string | null = null;
   try {
     const supabase = await createSupabaseServerClient();
     const {
@@ -233,6 +245,7 @@ export async function PATCH(req: Request) {
     if (userErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    viewerId = user.id;
 
     const denied = await businessOsForbiddenIfNeeded(supabase, user.id);
     if (denied) return denied;
@@ -320,6 +333,14 @@ export async function PATCH(req: Request) {
   } catch (e) {
     const msg = errorMessageFromUnknown(e);
     console.error("[business-setup PATCH]", e);
+    if (viewerId) {
+      void capturePostHogServerEvent(viewerId, "business_setup_api_error", {
+        method: "PATCH",
+        http_status: 500,
+        error_message: msg,
+        route: "/api/workspace/business-setup",
+      });
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

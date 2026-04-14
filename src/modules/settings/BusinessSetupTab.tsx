@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import posthog from "posthog-js";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,10 @@ export function BusinessSetupTab() {
       if (!res.ok) {
         const code = j?.error;
         if (res.status === 403 && code === "business_os_not_entitled") {
+          posthog.capture("business_setup_entitlement_blocked", {
+            http_status: res.status,
+            error_code: String(code),
+          });
           setErr("Business Setup is available on Executive OS.");
           setPayload(null);
           return;
@@ -65,7 +70,10 @@ export function BusinessSetupTab() {
       setDeptByUser(d);
       setSetupPermByUser(p);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to load");
+      const message = e instanceof Error ? e.message : "Failed to load";
+      posthog.capture("business_setup_client_error", { phase: "load", message });
+      if (e instanceof Error) posthog.captureException(e);
+      setErr(message);
       setPayload(null);
     } finally {
       setLoading(false);
@@ -114,7 +122,10 @@ export function BusinessSetupTab() {
       setNotice("Saved.");
       await load();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Save failed");
+      const message = e instanceof Error ? e.message : "Save failed";
+      posthog.capture("business_setup_client_error", { phase: "save", message });
+      if (e instanceof Error) posthog.captureException(e);
+      setErr(message);
     } finally {
       setSaving(false);
     }
