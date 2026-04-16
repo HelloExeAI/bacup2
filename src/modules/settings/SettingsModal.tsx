@@ -20,6 +20,7 @@ import { INTERNATIONAL_DIAL_CODES, splitLegacyPhone } from "@/modules/settings/i
 import { DEEPGRAM_LANGUAGE_OPTIONS } from "@/modules/settings/deepgramLanguages";
 import { performAppSignOut } from "@/lib/auth/clientSignOut";
 import { BillingPage } from "@/modules/settings/billing/BillingPage";
+import { EaDelegationSettingsSection } from "@/modules/settings/EaDelegationSettingsSection";
 import { TeamSetupTab } from "@/modules/settings/TeamSetupTab";
 import { FollowAutomationTab } from "@/modules/settings/FollowAutomationTab";
 import { LocationTimezoneSection } from "@/modules/settings/LocationTimezoneSection";
@@ -954,15 +955,12 @@ export function SettingsModal({
                     <div className="rounded-lg border border-[#E0DDD6] bg-white/50 px-3 py-2 text-[11px] dark:border-[hsl(35_10%_28%)] dark:bg-black/20">
                       <div className="font-medium text-foreground">EA access</div>
                       <p className="mt-1 text-muted-foreground">
-                        Delegate visibility (email-derived tasks, calendar summary, decisions, projects) from Business OS
-                        → EA delegation.
+                        Configure what your executive assistant can see (email-derived tasks, calendar summary, decisions)
+                        under Team → EA delegation.
                       </p>
-                      <Link
-                        href="/workspace"
-                        className="mt-2 inline-flex text-xs font-medium text-foreground underline underline-offset-2"
-                      >
-                        Open workspace &amp; EA policies
-                      </Link>
+                      <Button type="button" variant="ghost" size="sm" className="mt-2 h-8 border border-border px-2 text-xs" onClick={() => setTab("team")}>
+                        Open Team → EA delegation
+                      </Button>
                     </div>
                   ) : null}
                   <p className="text-[10px] text-muted-foreground">
@@ -1376,6 +1374,7 @@ export function SettingsModal({
                 <div className="rounded-md border border-dashed border-[#E0DDD6] bg-white/40 px-3 py-2 text-xs text-muted-foreground dark:border-[hsl(35_10%_28%)]">
                   Team chat settings — configure shared channels and notifications (coming soon).
                 </div>
+                {payload ? <EaDelegationSettingsSection teamMembers={payload.teamMembers ?? []} /> : null}
               </div>
             ) : tab === "team_setup" ? (
               <TeamSetupTab />

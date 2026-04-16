@@ -70,8 +70,7 @@ export function MyViewHub() {
         <p className="max-w-2xl text-sm text-muted-foreground">
           Your tasks and rhythm in one place.{" "}
           <span className="text-foreground/90">
-            Business OS (org, decisions, recognition, EA delegation) is included on{" "}
-            <strong>Executive OS</strong>.
+            Business OS (decisions, approvals) is included on <strong>Executive OS</strong>.
           </span>
         </p>
       </header>
