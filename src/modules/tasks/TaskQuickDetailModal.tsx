@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { BodyPortal } from "@/components/portal/BodyPortal";
 import type { Task } from "@/store/taskStore";
 import { scratchpadGmailHref } from "@/lib/tasks/scratchpadGmailHref";
 import { formatUpdatedByLine } from "@/lib/tasks/actorLabels";
@@ -118,6 +119,7 @@ export function TaskQuickDetailModal({
   const done = task.status === "done";
 
   return (
+    <BodyPortal>
     <div className={`fixed inset-0 ${zClass}`}>
       <button
         type="button"
@@ -268,5 +270,6 @@ export function TaskQuickDetailModal({
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }

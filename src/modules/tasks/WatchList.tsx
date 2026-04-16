@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
+import { BodyPortal } from "@/components/portal/BodyPortal";
 import { useTaskStore, type Task, type TaskType } from "@/store/taskStore";
 import { formatUpdatedByLine } from "@/lib/tasks/actorLabels";
 import { isTaskOverdue, overdueAgingLabel } from "@/lib/tasks/taskOverdue";
@@ -315,6 +316,7 @@ export function WatchListModal({
     "relative z-10 w-full max-w-[760px] overflow-hidden rounded-xl bg-background shadow-[0_1px_0_rgba(70,54,39,0.05),0_12px_40px_rgba(61,45,33,0.14)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.55)]";
 
   return (
+    <BodyPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
@@ -648,6 +650,7 @@ export function WatchListModal({
         saving={!!peekLive && savingId === peekLive.id}
       />
     </div>
+    </BodyPortal>
   );
 }
 

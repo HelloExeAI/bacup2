@@ -5,6 +5,7 @@ import * as React from "react";
 import type { TimelineItem, TimelineSource } from "@/lib/timeline/types";
 import type { Task, TaskType } from "@/store/taskStore";
 import { useTaskStore } from "@/store/taskStore";
+import { BodyPortal } from "@/components/portal/BodyPortal";
 import { TaskQuickDetailModal } from "@/modules/tasks/TaskQuickDetailModal";
 import { defaultDueTimeQuarterHour } from "@/lib/datetime/quarterHour";
 import { TaskDescriptionAiField } from "@/modules/tasks/TaskDescriptionAiField";
@@ -216,6 +217,7 @@ function TimelineTaskEditorModal({
 
   const done = task.status === "done";
   return (
+    <BodyPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3">
       <button type="button" className="absolute inset-0 bg-black/40" onClick={onCancel} />
       <div
@@ -356,6 +358,7 @@ function TimelineTaskEditorModal({
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }
 
@@ -375,6 +378,7 @@ function TimelineCalendarEventModal({
   const extra = att.length > 5 ? att.length - 5 : 0;
   const show = att.slice(0, 5);
   return (
+    <BodyPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3">
       <button type="button" className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
@@ -486,6 +490,7 @@ function TimelineCalendarEventModal({
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }
 
