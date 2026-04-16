@@ -12,9 +12,9 @@ export function RightPanel() {
   const [watchInitialTab, setWatchInitialTab] = React.useState<WatchTab | undefined>(undefined);
 
   return (
-    <aside className="hidden w-80 min-w-0 shrink-0 bg-background/70 xl:block">
+    <aside className="hidden w-80 min-w-0 shrink-0 bg-background/40 backdrop-blur xl:block">
       <div className="flex min-h-0 flex-col gap-3 p-3">
-        <section className="min-w-0 rounded-xl bacup-surface p-3">
+        <section className="min-w-0 rounded-2xl feed-surface p-3">
           <TodayFocus
             onOpenTasks={(opts) => {
               setWatchDueDateFilter(opts?.dueDateFilter);

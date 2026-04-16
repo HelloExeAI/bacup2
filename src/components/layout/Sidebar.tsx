@@ -14,9 +14,9 @@ export function Sidebar() {
   const dashboardActive = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-border/80 bg-background/70 md:block">
+    <aside className="hidden w-60 shrink-0 border-r border-border/70 bg-background/40 backdrop-blur md:block">
       <div className="space-y-3 p-3">
-        <section className="rounded-xl bg-muted/45 p-3 shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
+        <section className="rounded-2xl feed-surface p-3">
           <SidebarCalendar
             onDateChange={(d) => {
               // Store as YYYY-MM-DD in local time.
@@ -28,16 +28,16 @@ export function Sidebar() {
           />
         </section>
         <div className="mx-1 h-px bg-border/50" />
-        <section className="rounded-xl bg-muted/45 p-3 shadow-[0_10px_24px_rgba(0,0,0,0.08)]">
+        <section className="rounded-2xl feed-surface p-3">
           <div className="flex items-center justify-center gap-2">
             <Link
               href="/dashboard"
               aria-label="Open Dashboard"
               className={[
-                "inline-flex h-10 w-10 items-center justify-center rounded-full bg-muted/80 shadow-sm transition-colors",
+                "inline-flex h-10 w-10 items-center justify-center rounded-full bg-background/60 shadow-sm transition-colors hover:bg-background",
                 dashboardActive
                   ? "text-blue-600"
-                  : "text-blue-500 hover:bg-foreground/5",
+                  : "text-blue-500",
               ].join(" ")}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -50,7 +50,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setWatchOpen(true)}
-              className="inline-flex h-10 items-center rounded-full bg-muted/80 px-4 text-[11px] font-semibold tracking-wide text-foreground shadow-sm hover:bg-foreground/5"
+              className="inline-flex h-10 items-center rounded-full bg-background/60 px-4 text-[11px] font-semibold tracking-wide text-foreground shadow-sm transition-colors hover:bg-background"
             >
               Watch List
             </button>

@@ -580,7 +580,7 @@ export function TextNotes() {
         </div>
       ) : (
       <>
-      <div className="flex h-[420px] flex-col rounded-lg border border-border bg-background/80 shadow-sm">
+      <div className="flex h-[420px] flex-col rounded-2xl feed-surface">
         <div className="relative flex items-center justify-end gap-2 border-b border-border px-3 py-2">
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="text-lg font-semibold tracking-wide text-foreground">{displayDate}</div>

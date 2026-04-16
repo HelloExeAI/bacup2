@@ -258,11 +258,11 @@ export function Topbar() {
     : "left-[calc(15rem+(100vw-15rem)/2)] -translate-x-1/2 xl:left-[calc(15rem+(100vw-15rem-16rem)/2)]";
 
   return (
-    <header className="relative z-40 h-16 border-b border-border/80 bg-background/95 backdrop-blur">
+    <header className="relative z-40 h-16 border-b border-border/70 bg-background/75 backdrop-blur">
       <div className="relative flex h-full w-full min-w-0 items-center justify-between gap-4 px-4 sm:px-5 lg:px-6">
         <div className="relative z-10 flex min-w-0 shrink-0 items-center gap-3">
           <Link href="/start" className="flex min-w-0 items-center gap-2.5" title="Home">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted text-sm font-semibold">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background/60 text-sm font-semibold shadow-sm">
               Bc
             </div>
             <div className="text-[15px] font-semibold tracking-wide">Bacup</div>

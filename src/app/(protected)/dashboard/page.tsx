@@ -265,7 +265,7 @@ export default function DashboardPage() {
   }, [data, kpiOpen, sourceFilter]);
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col rounded-xl bg-muted/35 p-4 shadow-[0_10px_24px_rgba(0,0,0,0.08)] md:p-5">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col rounded-2xl feed-surface p-4 md:p-5">
       <ExecutiveCockpitHeader
         showBack={!!detailTask}
         onBack={() => setDetailTask(null)}
@@ -300,7 +300,7 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => setRecurringOpen(true)}
-                  className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted/60"
+                  className="rounded-full border border-border bg-background/60 px-4 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-background"
                 >
                   + Recurring task
                 </button>
@@ -310,7 +310,7 @@ export default function DashboardPage() {
                     onClick={() => void cleanupEmailJunkTasks()}
                     disabled={cleaningEmailJunk || loading}
                     title="Remove pending tasks that look like job alerts, banking promos, webinars, etc."
-                    className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+                    className="rounded-full border border-border bg-background/60 px-4 py-2 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-background hover:text-foreground disabled:opacity-50"
                   >
                     {cleaningEmailJunk ? "Cleaning…" : "Remove email junk"}
                   </button>

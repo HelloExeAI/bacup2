@@ -36,7 +36,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {isDashboard ? (
                 <div className="flex h-full min-h-0 w-full flex-1 flex-col p-3 md:p-4">{children}</div>
               ) : (
-                <div className="mx-auto w-full max-w-[min(1400px,calc(100vw-24px))] rounded-xl bacup-surface p-3 md:p-4">
+                <div className="mx-auto w-full max-w-[min(1400px,calc(100vw-24px))] rounded-2xl feed-surface p-3 md:p-4">
                   {children}
                 </div>
               )}

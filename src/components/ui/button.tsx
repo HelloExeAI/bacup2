@@ -11,11 +11,11 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const base =
-  "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex items-center justify-center rounded-full font-medium transition-[transform,opacity,background-color,border-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.99]";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-foreground text-background hover:opacity-90",
-  ghost: "hover:bg-foreground/5",
+  primary: "bg-foreground text-background shadow-sm hover:opacity-90",
+  ghost: "border border-border bg-background/40 hover:bg-background/80",
 };
 
 const sizes: Record<Size, string> = {

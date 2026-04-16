@@ -37,14 +37,14 @@ export function CalendarView() {
         {[...byDate.entries()].map(([date, list]) => (
           <section
             key={date}
-            className="rounded-lg border border-border bg-background p-4"
+            className="rounded-2xl feed-surface p-4"
           >
             <div className="text-sm font-semibold">{date}</div>
             <div className="mt-2 space-y-2">
               {list.map((e) => (
                 <div
                   key={e.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/50 px-3 py-2 transition-colors hover:bg-background"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">
