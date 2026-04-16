@@ -28,7 +28,7 @@ const features = [
 export function FeaturesSection() {
   return (
     <>
-      <MarketingSection className="border-b border-border/70">
+      <MarketingSection id="technology" className="scroll-mt-20 border-b border-border/70">
         <MarketingContainer>
           <div className="grid gap-8 md:grid-cols-2">
             {story.map((b) => (
