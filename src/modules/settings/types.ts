@@ -4,6 +4,8 @@ import type { ClockDisplayFormat, ClockTimezoneSource } from "@/lib/time/clockDi
 
 export type SubscriptionStatus = "active" | "trial" | "expired" | "canceled";
 
+export type FollowupCommunicationChannel = "email" | "whatsapp" | "slack";
+
 export type UserSettingsRow = {
   user_id: string;
   preferred_language: string;
@@ -19,6 +21,11 @@ export type UserSettingsRow = {
   smart_reminders: boolean;
   followup_nudges: boolean;
   overdue_alerts: boolean;
+  followup_communication_channel: FollowupCommunicationChannel;
+  /** Subject line for Automate Followups email; supports {{task_count}}, {{primary_task_title}}, etc. */
+  followup_email_subject_template: string;
+  /** Body for Automate Followups email; supports {{user_message}}, {{task_bullets}}, etc. */
+  followup_email_body_template: string;
   daily_briefing_notification_time: string | null;
   notification_sound: NotificationSoundId;
   event_reminders: boolean;
@@ -55,7 +62,7 @@ export type TeamMemberSummary = {
   display_name: string | null;
   status: string;
   can_view_dashboard_for_others: boolean;
-  /** Human-readable department (e.g. "Sales") when assigned in Business Setup. */
+  /** Human-readable department (e.g. "Sales") when assigned in Team Setup. */
   department: string | null;
 };
 

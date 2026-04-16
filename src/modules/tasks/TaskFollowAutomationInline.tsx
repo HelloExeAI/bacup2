@@ -148,7 +148,7 @@ export function TaskFollowAutomationInline({
 
   return (
     <div className="mt-4 border-t border-border/60 pt-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Follow with Bacup</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Automate Followups</div>
       <p className="mt-1 text-[11px] text-muted-foreground">
         Bacup can send status nudges on your behalf from your chosen Google account (see Settings → Follow
         automation). Enroll per task with the assignee&apos;s email.

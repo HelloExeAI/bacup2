@@ -29,7 +29,7 @@ type GetPayload = {
   error?: string;
 };
 
-export function BusinessSetupTab() {
+export function TeamSetupTab() {
   const [payload, setPayload] = React.useState<GetPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -44,16 +44,16 @@ export function BusinessSetupTab() {
     setErr(null);
     setNotice(null);
     try {
-      const res = await fetch("/api/workspace/business-setup", { credentials: "include" });
+      const res = await fetch("/api/workspace/team-setup", { credentials: "include" });
       const j = (await res.json().catch(() => null)) as GetPayload & { error?: string; details?: string };
       if (!res.ok) {
         const code = j?.error;
         if (res.status === 403 && code === "business_os_not_entitled") {
-          posthog.capture("business_setup_entitlement_blocked", {
+          posthog.capture("team_setup_entitlement_blocked", {
             http_status: res.status,
             error_code: String(code),
           });
-          setErr("Business Setup is available on Executive OS.");
+          setErr("Team Setup is available on Executive OS.");
           setPayload(null);
           return;
         }
@@ -73,7 +73,7 @@ export function BusinessSetupTab() {
       setSetupPermByUser(p);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to load";
-      posthog.capture("business_setup_client_error", { phase: "load", message });
+      posthog.capture("team_setup_client_error", { phase: "load", message });
       if (e instanceof Error) posthog.captureException(e);
       setErr(message);
       setPayload(null);
@@ -113,7 +113,7 @@ export function BusinessSetupTab() {
           }));
       }
 
-      const res = await fetch("/api/workspace/business-setup", {
+      const res = await fetch("/api/workspace/team-setup", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         credentials: "include",
@@ -125,7 +125,7 @@ export function BusinessSetupTab() {
       await load();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Save failed";
-      posthog.capture("business_setup_client_error", { phase: "save", message });
+      posthog.capture("team_setup_client_error", { phase: "save", message });
       if (e instanceof Error) posthog.captureException(e);
       setErr(message);
     } finally {
@@ -165,7 +165,7 @@ export function BusinessSetupTab() {
       {!payload.can_edit ? (
         <p className="rounded-md border border-amber-500/35 bg-amber-500/[0.08] px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
           You can view assignments. Only the workspace founder or a member with{" "}
-          <strong>Can manage Business Setup</strong> can edit.
+          <strong>Can manage Team Setup</strong> can edit.
         </p>
       ) : null}
 

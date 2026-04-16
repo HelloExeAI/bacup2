@@ -1,4 +1,4 @@
--- Workspace department assignments (fixed taxonomy) + permission to co-manage Business Setup.
+-- Workspace department assignments (fixed taxonomy) + permission to co-manage Team Setup.
 
 alter table public.team_member_permissions
   add column if not exists can_manage_business_setup boolean not null default false;

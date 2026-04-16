@@ -60,6 +60,9 @@ const SettingsPatchSchema = z
     smart_reminders: z.boolean().optional(),
     followup_nudges: z.boolean().optional(),
     overdue_alerts: z.boolean().optional(),
+    followup_communication_channel: z.enum(["email", "whatsapp", "slack"]).optional(),
+    followup_email_subject_template: z.string().min(1).max(500).optional(),
+    followup_email_body_template: z.string().min(1).max(20000).optional(),
     daily_briefing_notification_time: z.preprocess(normalizeBriefingTime, z.union([z.string().regex(/^\d{2}:\d{2}$/), z.null()]).optional()),
     notification_sound: z
       .enum([

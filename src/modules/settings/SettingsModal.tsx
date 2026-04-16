@@ -20,7 +20,7 @@ import { INTERNATIONAL_DIAL_CODES, splitLegacyPhone } from "@/modules/settings/i
 import { DEEPGRAM_LANGUAGE_OPTIONS } from "@/modules/settings/deepgramLanguages";
 import { performAppSignOut } from "@/lib/auth/clientSignOut";
 import { BillingPage } from "@/modules/settings/billing/BillingPage";
-import { BusinessSetupTab } from "@/modules/settings/BusinessSetupTab";
+import { TeamSetupTab } from "@/modules/settings/TeamSetupTab";
 import { FollowAutomationTab } from "@/modules/settings/FollowAutomationTab";
 import { LocationTimezoneSection } from "@/modules/settings/LocationTimezoneSection";
 import { ProfileAvatarEditor } from "@/modules/settings/ProfileAvatarEditor";
@@ -40,8 +40,9 @@ export type SettingsTabId =
   | "notifications"
   | "integrations"
   | "follow_automation"
-   | "team"
-  | "business_setup"
+  | "communications"
+  | "team"
+  | "team_setup"
   | "billing";
 
 type TabId = SettingsTabId;
@@ -506,6 +507,9 @@ export function SettingsModal({
             smart_reminders: settings.smart_reminders,
             followup_nudges: settings.followup_nudges,
             overdue_alerts: settings.overdue_alerts,
+            followup_communication_channel: settings.followup_communication_channel,
+            followup_email_subject_template: settings.followup_email_subject_template,
+            followup_email_body_template: settings.followup_email_body_template,
             daily_briefing_notification_time: settings.daily_briefing_notification_time,
             notification_sound: settings.notification_sound,
             event_reminders: settings.event_reminders,
@@ -665,8 +669,9 @@ export function SettingsModal({
     { id: "notifications", label: "Notifications" },
     { id: "integrations", label: "Integrations" },
     { id: "follow_automation", label: "Follow automation" },
+    { id: "communications", label: "Communications" },
     { id: "team", label: "Team" },
-    { id: "business_setup", label: "Business Setup" },
+    { id: "team_setup", label: "Team Setup" },
     { id: "billing", label: "Billing" },
   ];
 
@@ -1257,6 +1262,77 @@ export function SettingsModal({
               </div>
             ) : tab === "follow_automation" ? (
               <FollowAutomationTab googleAccounts={googleAccounts} />
+            ) : tab === "communications" ? (
+              <div className="space-y-4 text-sm">
+                <p className="text-xs text-muted-foreground">
+                  Choose a channel for communication. This will be used as the default for Automate Followups (you can
+                  change it per follow up).
+                </p>
+
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Choose a channel for communication
+                  </div>
+                  <select
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    value={settings?.followup_communication_channel ?? "email"}
+                    onChange={(e) =>
+                      patchSettings({
+                        followup_communication_channel: e.target.value as UserSettingsRow["followup_communication_channel"],
+                      })
+                    }
+                    disabled={!settings || saving}
+                  >
+                    <option value="email">Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="slack">Slack</option>
+                  </select>
+                  <div className="text-[11px] text-muted-foreground">
+                    Connect email in <span className="font-medium">Integrations</span> to enable sending from Bacup.
+                  </div>
+                </div>
+
+                <div className="space-y-2 border-t border-[#E0DDD6] pt-4 dark:border-[hsl(35_10%_28%)]">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Email follow-up template
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Conversational, interactive tone works best. Placeholders:{" "}
+                    <span className="font-mono text-[10px]">
+                      {"{{user_message}} {{task_bullets}} {{task_count}} {{recipient_greeting}} {{recipient_email}} {{primary_task_title}} {{sender_name}}"}
+                    </span>
+                  </p>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-foreground">Subject</div>
+                    <input
+                      className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                      value={settings?.followup_email_subject_template ?? ""}
+                      onChange={(e) => patchSettings({ followup_email_subject_template: e.target.value })}
+                      disabled={!settings || saving}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-foreground">Body</div>
+                    <textarea
+                      className="min-h-[200px] w-full resize-y rounded-md border border-border bg-background px-2 py-2 text-sm"
+                      value={settings?.followup_email_body_template ?? ""}
+                      onChange={(e) => patchSettings({ followup_email_body_template: e.target.value })}
+                      disabled={!settings || saving}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!settings || saving}
+                    onClick={() => void saveProfileAndPrefs("Communications settings were saved.")}
+                  >
+                    {saving ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              </div>
             ) : tab === "team" ? (
               <div className="space-y-4 text-sm">
                 <p className="text-xs text-muted-foreground">
@@ -1297,8 +1373,8 @@ export function SettingsModal({
                   Team chat settings — configure shared channels and notifications (coming soon).
                 </div>
               </div>
-            ) : tab === "business_setup" ? (
-              <BusinessSetupTab />
+            ) : tab === "team_setup" ? (
+              <TeamSetupTab />
             ) : (
               <BillingPage settings={settings} reloadSettings={load} flashSaveNotice={flashSaveNotice} />
             )

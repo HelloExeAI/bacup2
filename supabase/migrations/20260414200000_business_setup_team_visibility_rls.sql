@@ -1,5 +1,5 @@
--- Allow workspace members to read the full team roster and Business Setup admins to read
--- permission rows, so /api/workspace/business-setup can use the session client (RLS as the
+-- Allow workspace members to read the full team roster and Team Setup admins to read
+-- permission rows, so /api/workspace/team-setup can use the session client (RLS as the
 -- signed-in user) instead of a misconfigured service-role client (anon key → auth.uid() null).
 
 drop policy if exists "Workspace members can view team roster" on public.team_members;
@@ -8,7 +8,7 @@ on public.team_members
 for select
 using (public.user_in_workspace(auth.uid(), owner_user_id));
 
--- Delegated Business Setup editors need to see all collaborators' permission flags (founders already covered).
+-- Delegated Team Setup editors need to see all collaborators' permission flags (founders already covered).
 drop policy if exists "Business setup admins can view team permissions" on public.team_member_permissions;
 create policy "Business setup admins can view team permissions"
 on public.team_member_permissions

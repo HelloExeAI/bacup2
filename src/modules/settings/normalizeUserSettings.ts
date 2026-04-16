@@ -2,6 +2,10 @@ import { coerceBacupTierId, type BillingInterval } from "@/lib/billing/bacupTier
 import { coerceNotificationSoundId } from "@/lib/notifications/notificationSounds";
 import type { SubscriptionStatus, UserSettingsRow } from "@/modules/settings/types";
 import { coerceClockDisplayFormat } from "@/lib/time/clockDisplay";
+import {
+  DEFAULT_FOLLOWUP_EMAIL_BODY_TEMPLATE,
+  DEFAULT_FOLLOWUP_EMAIL_SUBJECT_TEMPLATE,
+} from "@/lib/followups/defaultTemplates";
 
 function coerceAssistantTone(v: unknown): UserSettingsRow["assistant_tone"] {
   if (v === "direct" || v === "balanced" || v === "detailed") return v;
@@ -33,6 +37,21 @@ function coerceBillingInterval(v: unknown): BillingInterval {
 function coerceSubscriptionStatus(v: unknown): SubscriptionStatus {
   if (v === "trial" || v === "expired" || v === "canceled") return v;
   return "active";
+}
+
+function coerceFollowupCommunicationChannel(v: unknown): UserSettingsRow["followup_communication_channel"] {
+  if (v === "email" || v === "whatsapp" || v === "slack") return v;
+  return "email";
+}
+
+function coerceFollowupEmailSubject(v: unknown): string {
+  if (typeof v !== "string" || !v.trim()) return DEFAULT_FOLLOWUP_EMAIL_SUBJECT_TEMPLATE;
+  return v.trim().slice(0, 500);
+}
+
+function coerceFollowupEmailBody(v: unknown): string {
+  if (typeof v !== "string" || !v.trim()) return DEFAULT_FOLLOWUP_EMAIL_BODY_TEMPLATE;
+  return v.trim().slice(0, 20000);
 }
 
 /**
@@ -76,6 +95,9 @@ export function normalizeUserSettingsRow(
     smart_reminders: coerceBool(r.smart_reminders, true),
     followup_nudges: coerceBool(r.followup_nudges, true),
     overdue_alerts: coerceBool(r.overdue_alerts, true),
+    followup_communication_channel: coerceFollowupCommunicationChannel(r.followup_communication_channel),
+    followup_email_subject_template: coerceFollowupEmailSubject(r.followup_email_subject_template),
+    followup_email_body_template: coerceFollowupEmailBody(r.followup_email_body_template),
     daily_briefing_notification_time:
       typeof r.daily_briefing_notification_time === "string" && r.daily_briefing_notification_time.trim()
         ? r.daily_briefing_notification_time.trim()

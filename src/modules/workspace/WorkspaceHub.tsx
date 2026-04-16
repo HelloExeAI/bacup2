@@ -10,7 +10,7 @@ import { useTaskStore } from "@/store/taskStore";
 import { useEventStore } from "@/store/eventStore";
 import type { SettingsPayload, TeamMemberSummary } from "@/modules/settings/types";
 import { useSettingsModal } from "@/modules/settings/SettingsProvider";
-import { FollowWithBacup } from "@/modules/workspace/FollowWithBacup";
+import { AutomateFollowups } from "@/modules/workspace/AutomateFollowups";
 import { OutboundNudgeDraft } from "@/modules/workspace/OutboundNudgeDraft";
 import { WorkspaceOsV2, type WorkspaceV2Bundle } from "@/modules/workspace/WorkspaceOsV2";
 import { requestOverviewKpi, type OverviewKpiKind } from "@/modules/tasks/overviewKpiBus";
@@ -806,11 +806,7 @@ export function WorkspaceHub() {
             ))}
           </ul>
         </div>
-        <FollowWithBacup
-          kpis={focusStats}
-          openCrossTeamDeps={openCrossTeamDeps}
-          dayBriefLines={todayBriefLines}
-        />
+        <AutomateFollowups />
         <OutboundNudgeDraft
           kpis={focusStats}
           openCrossTeamDeps={openCrossTeamDeps}
@@ -1228,9 +1224,9 @@ export function WorkspaceHub() {
               <button
                 type="button"
                 className="font-medium text-foreground underline underline-offset-2 hover:opacity-90"
-                onClick={() => openSettingsToTab("business_setup")}
+                onClick={() => openSettingsToTab("team_setup")}
               >
-                Settings → Business Setup
+                Settings → Team Setup
               </button>
               .
             </p>

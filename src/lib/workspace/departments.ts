@@ -1,8 +1,8 @@
-/** Fixed department taxonomy for Business Setup (workspace-scoped assignments). */
+/** Fixed department taxonomy for Team Setup (workspace-scoped assignments). */
 
 export const REVENUE_DEPARTMENTS = ["operations", "sales", "marketing"] as const;
 export const SUPPORT_DEPARTMENTS = ["people", "finance", "admin", "it"] as const;
-/** Leadership / exec titles mapped like departments in Business Setup (not the same as workspace owner). */
+/** Leadership / exec titles mapped like departments in Team Setup (not the same as workspace owner). */
 export const MANAGEMENT_DEPARTMENTS = ["founder", "cofounder", "ceo"] as const;
 
 export const WORKSPACE_DEPARTMENTS = [

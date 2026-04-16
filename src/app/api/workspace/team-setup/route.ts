@@ -57,7 +57,7 @@ function profileDisplayName(p: {
   return p.name?.trim() || "Member";
 }
 
-async function viewerCanManageBusinessSetup(
+async function viewerCanManageTeamSetup(
   db: SupabaseClient,
   viewerId: string,
   workspaceOwnerId: string,
@@ -182,7 +182,7 @@ export async function GET() {
       }
     }
 
-    const canEdit = await viewerCanManageBusinessSetup(supabase, user.id, ws);
+    const canEdit = await viewerCanManageTeamSetup(supabase, user.id, ws);
     const isFounderViewer = ctx.isFounder;
 
     const people = ids.map((uid) => {
@@ -221,13 +221,13 @@ export async function GET() {
     });
   } catch (e) {
     const msg = errorMessageFromUnknown(e);
-    console.error("[business-setup GET]", e);
+    console.error("[team-setup GET]", e);
     if (viewerId) {
-      void capturePostHogServerEvent(viewerId, "business_setup_api_error", {
+      void capturePostHogServerEvent(viewerId, "team_setup_api_error", {
         method: "GET",
         http_status: 500,
         error_message: msg,
-        route: "/api/workspace/business-setup",
+        route: "/api/workspace/team-setup",
       });
     }
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -253,7 +253,7 @@ export async function PATCH(req: Request) {
     const ctx = await resolveWorkspaceContext(supabase, user.id);
     const ws = ctx.workspaceOwnerId;
 
-    const canEdit = await viewerCanManageBusinessSetup(supabase, user.id, ws);
+    const canEdit = await viewerCanManageTeamSetup(supabase, user.id, ws);
     if (!canEdit) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -332,13 +332,13 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = errorMessageFromUnknown(e);
-    console.error("[business-setup PATCH]", e);
+    console.error("[team-setup PATCH]", e);
     if (viewerId) {
-      void capturePostHogServerEvent(viewerId, "business_setup_api_error", {
+      void capturePostHogServerEvent(viewerId, "team_setup_api_error", {
         method: "PATCH",
         http_status: 500,
         error_message: msg,
-        route: "/api/workspace/business-setup",
+        route: "/api/workspace/team-setup",
       });
     }
     return NextResponse.json({ error: msg }, { status: 500 });

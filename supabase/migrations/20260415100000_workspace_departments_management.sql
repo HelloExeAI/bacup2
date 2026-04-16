@@ -1,4 +1,4 @@
--- Add Management vertical: founder, cofounder, ceo (workspace role mapping in Business Setup).
+-- Add Management vertical: founder, cofounder, ceo (workspace role mapping in Team Setup).
 
 alter table public.workspace_department_assignments
   drop constraint if exists workspace_department_assignments_department_check;
