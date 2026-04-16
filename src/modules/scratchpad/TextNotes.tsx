@@ -16,6 +16,7 @@ import {
 import { VoiceInput } from "@/modules/scratchpad/VoiceInput";
 import { GmailComposeWorkspace } from "@/modules/google/GmailComposeWorkspace";
 import { GmailThreadWorkspace } from "@/modules/google/GmailThreadWorkspace";
+import { MeetingsNotes } from "@/modules/scratchpad/MeetingsNotes";
 
 /** Client-only: avoids SSR/client class drift and hydration mismatches for async mail UI. */
 const ScratchpadGmailStrip = dynamic(
@@ -121,6 +122,8 @@ export function TextNotes() {
 
   const router = useRouter();
   const searchParams = useSearchParams();
+  const view = (searchParams.get("view") ?? "").trim().toLowerCase();
+  const meetingsView = view === "meetings";
   const openGmailThread = useScratchpadStore((s) => s.openGmailThread);
   /** Last deep link we successfully opened (cleared when query params go away). */
   const openedGmailLinkKeyRef = React.useRef<string>("");
@@ -556,6 +559,10 @@ export function TextNotes() {
     return `${weekdayLong[date.getDay()]}, ${monthShort[(m || 1) - 1]} ${d}, ${y}`;
   }, [selectedDate]);
 
+  if (meetingsView && !gmailComposeOpen && !gmailThreadOpen) {
+    return <MeetingsNotes />;
+  }
+
   return (
     <>
       {gmailComposeOpen ? (
@@ -578,6 +585,13 @@ export function TextNotes() {
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="text-lg font-semibold tracking-wide text-foreground">{displayDate}</div>
         </div>
+        <button
+          type="button"
+          onClick={() => router.push("/scratchpad?view=meetings")}
+          className="h-7 rounded-full border border-border bg-muted px-3 text-[11px] font-medium text-foreground transition-colors hover:bg-foreground/5"
+        >
+          Meetings
+        </button>
         <button
           type="button"
           onClick={() => setSelectedDate(todayYmd)}

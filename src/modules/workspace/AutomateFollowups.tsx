@@ -49,6 +49,7 @@ function assigneeSortKey(t: Task): string {
 
 export function AutomateFollowups() {
   const tasks = useTaskStore((s) => s.tasks);
+  const addTasks = useTaskStore((s) => s.addTasks);
   const followupTasks = React.useMemo(() => {
     const open = tasks.filter((t) => t.status === "pending").filter(includeInAutomateFollowups);
     return [...open].sort((a, b) => {
@@ -72,6 +73,34 @@ export function AutomateFollowups() {
   const [saving, setSaving] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+
+  const [assignOpenId, setAssignOpenId] = React.useState<string | null>(null);
+  const [assignDraft, setAssignDraft] = React.useState("");
+  const [assignSavingId, setAssignSavingId] = React.useState<string | null>(null);
+
+  const saveAssignee = async (taskId: string) => {
+    const v = assignDraft.trim();
+    if (!v) return;
+    setAssignSavingId(taskId);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ assigned_to: v }),
+      });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(typeof j?.error === "string" ? j.error : "Assign failed");
+      if (j?.task) addTasks([j.task as Task]);
+      setAssignOpenId(null);
+      setAssignDraft("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Assign failed");
+    } finally {
+      setAssignSavingId(null);
+    }
+  };
 
   React.useEffect(() => {
     let cancelled = false;
@@ -223,9 +252,58 @@ export function AutomateFollowups() {
                 <div className="truncate text-xs font-medium text-foreground">{t.title}</div>
                 <div className="truncate text-[10px] text-muted-foreground">{formatTaskMeta(t)}</div>
               </div>
-              <Button type="button" size="sm" onClick={() => openModalForTask(t.id)}>
-                Follow up
-              </Button>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                {String(t.assigned_to ?? "").trim() === "" ? (
+                  assignOpenId === t.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="h-8 w-[min(240px,60vw)] rounded-md border border-border bg-background px-2 text-xs"
+                        value={assignDraft}
+                        onChange={(e) => setAssignDraft(e.target.value)}
+                        placeholder="Assignee (email or name)"
+                        disabled={assignSavingId === t.id}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void saveAssignee(t.id)}
+                        disabled={assignSavingId === t.id || !assignDraft.trim()}
+                      >
+                        {assignSavingId === t.id ? "Saving…" : "Save"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="border border-border/60"
+                        onClick={() => {
+                          setAssignOpenId(null);
+                          setAssignDraft("");
+                        }}
+                        disabled={assignSavingId === t.id}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="border border-border/60"
+                      onClick={() => {
+                        setAssignOpenId(t.id);
+                        setAssignDraft("");
+                      }}
+                    >
+                      Assign
+                    </Button>
+                  )
+                ) : null}
+                <Button type="button" size="sm" onClick={() => openModalForTask(t.id)}>
+                  Follow up
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

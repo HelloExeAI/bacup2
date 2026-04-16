@@ -12,6 +12,7 @@ import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
 import { useSettingsModal } from "@/modules/settings/SettingsProvider";
 import { useClockPreferencesStore } from "@/store/clockPreferencesStore";
 import { useUserStore } from "@/store/userStore";
+import { useMeetingRecorderStore } from "@/store/meetingRecorderStore";
 
 /** Heroicons outline `cog-6-tooth` — standard 6-tooth gear */
 const COG_6_OUTER =
@@ -201,6 +202,34 @@ function AskBacupMicButton() {
   );
 }
 
+function MeetingRecorderButton() {
+  const open = useMeetingRecorderStore((s) => s.open);
+  return (
+    <button
+      type="button"
+      aria-label="Meeting recorder"
+      title="Meeting recorder"
+      onClick={() => open()}
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-transparent text-foreground transition-[transform,colors] hover:bg-muted/60 active:scale-[0.97]"
+    >
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-foreground/90" aria-hidden>
+        <path
+          d="M9 7a3 3 0 0 1 6 0v6a3 3 0 1 1-6 0V7Z"
+          stroke="currentColor"
+          strokeWidth="1.75"
+        />
+        <path
+          d="M7 11v1a5 5 0 0 0 10 0v-1"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+        />
+        <path d="M12 18v3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
+
 export function Topbar() {
   const pathname = usePathname();
   const isDashboard =
@@ -257,6 +286,7 @@ export function Topbar() {
         <div className="relative z-10 flex min-w-0 shrink-0 items-center justify-end gap-2 sm:gap-3">
           {user ? <TopbarNavMenuButton /> : null}
           {user ? <AskBacupMicButton /> : null}
+          {user ? <MeetingRecorderButton /> : null}
           <ThemeToggle iconOnly variant="topbar" />
           <AppNotificationBell size="topbar" />
           <button

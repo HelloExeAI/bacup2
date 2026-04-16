@@ -4,6 +4,7 @@ import Link from "next/link";
 import * as React from "react";
 
 import { absoluteSignInUrl, absoluteSignUpUrl, getAppOrigin } from "@/lib/marketing/urls";
+import { MarketingContainer } from "@/components/marketing/primitives";
 
 const nav = [
   { href: "/#layers", label: "Product" },
@@ -29,15 +30,12 @@ export function MarketingNavbar() {
       className={[
         "sticky top-0 z-50 border-b transition-[background,box-shadow] duration-200",
         scrolled
-          ? "border-[#e8e4dc] bg-[#faf9f7]/90 shadow-sm backdrop-blur-md dark:border-[hsl(35_10%_22%)] dark:bg-[hsl(28_12%_10%)]/90"
-          : "border-transparent bg-[#faf9f7]/80 backdrop-blur-sm dark:bg-[hsl(28_12%_10%)]/80",
+          ? "border-border/70 bg-background/80 shadow-sm backdrop-blur-md"
+          : "border-transparent bg-background/60 backdrop-blur-sm",
       ].join(" ")}
     >
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
-        <Link
-          href="/"
-          className="text-[15px] font-semibold tracking-tight text-[#1a1814] dark:text-[hsl(40_20%_96%)]"
-        >
+      <MarketingContainer className="flex h-14 items-center justify-between gap-4 sm:h-16">
+        <Link href="/" className="text-[15px] font-semibold tracking-tight text-foreground">
           Bacup
         </Link>
         <nav className="hidden items-center gap-8 md:flex">
@@ -45,7 +43,7 @@ export function MarketingNavbar() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-sm font-medium text-[#5c574e] transition-colors hover:text-[#1a1814] dark:text-[hsl(35_12%_72%)] dark:hover:text-white"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               {item.label}
             </Link>
@@ -55,14 +53,14 @@ export function MarketingNavbar() {
           {useExternal ? (
             <a
               href={signIn}
-              className="rounded-full px-3 py-2 text-sm font-medium text-[#5c574e] transition-colors hover:text-[#1a1814] dark:text-[hsl(35_12%_72%)] dark:hover:text-white"
+              className="rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Sign in
             </a>
           ) : (
             <Link
               href="/signin"
-              className="rounded-full px-3 py-2 text-sm font-medium text-[#5c574e] transition-colors hover:text-[#1a1814] dark:text-[hsl(35_12%_72%)] dark:hover:text-white"
+              className="rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Sign in
             </Link>
@@ -70,20 +68,20 @@ export function MarketingNavbar() {
           {useExternal ? (
             <a
               href={signUp}
-              className="rounded-full bg-[#1a1814] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 dark:bg-white dark:text-[#1a1814]"
+              className="inline-flex h-9 items-center justify-center rounded-full bg-foreground px-4 text-sm font-semibold text-background shadow-sm transition-opacity hover:opacity-90"
             >
               Get started
             </a>
           ) : (
             <Link
               href="/signup"
-              className="rounded-full bg-[#1a1814] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 dark:bg-white dark:text-[#1a1814]"
+              className="inline-flex h-9 items-center justify-center rounded-full bg-foreground px-4 text-sm font-semibold text-background shadow-sm transition-opacity hover:opacity-90"
             >
               Get started
             </Link>
           )}
         </div>
-      </div>
+      </MarketingContainer>
     </header>
   );
 }

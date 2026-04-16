@@ -7,6 +7,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { RightPanel } from "@/components/layout/RightPanel";
 import { useRecurrenceReconcile } from "@/hooks/useRecurrenceReconcile";
 import { AskBacupDock } from "@/components/ask-bacup/AskBacupDock";
+import { MeetingRecorderDock } from "@/components/meeting-recorder/MeetingRecorderDock";
 import { SettingsProvider } from "@/modules/settings/SettingsProvider";
 import { useUserStore } from "@/store/userStore";
 
@@ -24,6 +25,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <SettingsProvider>
       <RecurrenceReconcileRunner />
       <AskBacupDock />
+      <MeetingRecorderDock />
       <div className="flex min-h-screen flex-col bg-background text-foreground">
         <Topbar />
         <div className="mx-auto flex min-h-0 w-full flex-1">

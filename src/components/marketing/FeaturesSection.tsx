@@ -1,12 +1,15 @@
-const blocks = [
-  {
-    title: "Problem",
-    body: "Too many tools. Too many things to track.",
-  },
-  {
-    title: "Solution",
-    body: "Bacup replaces notes, tasks, calendar, and thinking.",
-  },
+import {
+  MarketingCard,
+  MarketingContainer,
+  MarketingH2,
+  MarketingKicker,
+  MarketingSection,
+  Reveal,
+} from "@/components/marketing/primitives";
+
+const story = [
+  { title: "Too many tools", body: "Tasks, calendar, notes, email, reminders — none of it is connected." },
+  { title: "One operating system", body: "Bacup unifies the work so you can execute faster and decide with context." },
 ];
 
 const layers = [
@@ -16,83 +19,91 @@ const layers = [
 ];
 
 const features = [
-  { title: "Scratchpad", desc: "Capture and shape thinking without losing threads." },
-  { title: "Tasks", desc: "Priorities, milestones, and recurrence in one flow." },
+  { title: "Scratchpad", desc: "Capture thinking as a living tree — notes that become actions." },
+  { title: "Meetings", desc: "Record, live transcript, and auto-extract actions into your OS." },
+  { title: "Follow-ups", desc: "Consolidated sends, status links, and reply-based updates." },
   { title: "Calendar", desc: "Google and Outlook, aligned with what you owe yourself." },
-  { title: "AI Assistant", desc: "Ask Bacup with full context across your workspace." },
 ];
 
 export function FeaturesSection() {
   return (
     <>
-      <section className="border-b border-[#e8e4dc] py-20 dark:border-[hsl(35_10%_22%)] sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="grid gap-12 md:grid-cols-2">
-            {blocks.map((b) => (
-              <div key={b.title}>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-[#8a8478] dark:text-[hsl(35_10%_52%)]">
-                  {b.title}
-                </h2>
-                <p className="mt-3 text-xl font-medium tracking-tight text-[#1a1814] dark:text-white sm:text-2xl">
-                  {b.body}
-                </p>
-              </div>
+      <MarketingSection className="border-b border-border/70">
+        <MarketingContainer>
+          <div className="grid gap-8 md:grid-cols-2">
+            {story.map((b) => (
+              <Reveal key={b.title}>
+                <MarketingCard className="p-8">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {b.title}
+                  </div>
+                  <div className="mt-3 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                    {b.body}
+                  </div>
+                </MarketingCard>
+              </Reveal>
             ))}
           </div>
-        </div>
-      </section>
+        </MarketingContainer>
+      </MarketingSection>
 
-      <section id="layers" className="scroll-mt-20 border-b border-[#e8e4dc] py-20 dark:border-[hsl(35_10%_22%)] sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="text-center text-sm font-semibold uppercase tracking-wider text-[#8a8478] dark:text-[hsl(35_10%_52%)]">
-            Three layers
-          </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-2xl font-semibold tracking-tight text-[#1a1814] dark:text-white sm:text-3xl">
-            System, automation, and intelligence — in order.
-          </p>
+      <MarketingSection id="layers" className="scroll-mt-20 border-b border-border/70">
+        <MarketingContainer>
+          <div className="text-center">
+            <Reveal>
+              <MarketingKicker>Three layers</MarketingKicker>
+            </Reveal>
+            <Reveal className="mt-3">
+              <div className="mx-auto max-w-2xl">
+                <MarketingH2>System, automation, and intelligence — in order.</MarketingH2>
+              </div>
+            </Reveal>
+          </div>
           <div className="mt-14 grid gap-6 md:grid-cols-3">
             {layers.map((layer) => (
-              <div
-                key={layer.name}
-                className="rounded-2xl border border-[#e8e4dc] bg-white/70 p-8 shadow-sm dark:border-[hsl(35_10%_22%)] dark:bg-[hsl(28_14%_12%)]"
-              >
-                <div className="text-xs font-medium uppercase tracking-wider text-[#8a8478] dark:text-[hsl(35_10%_52%)]">
-                  {layer.subtitle}
-                </div>
-                <h3 className="mt-2 text-xl font-semibold text-[#1a1814] dark:text-white">{layer.name}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-[#5c574e] dark:text-[hsl(35_12%_70%)]">
-                  {layer.desc}
-                </p>
-              </div>
+              <Reveal key={layer.name}>
+                <MarketingCard className="p-8 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {layer.subtitle}
+                  </div>
+                  <h3 className="mt-2 text-xl font-semibold text-foreground">{layer.name}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{layer.desc}</p>
+                </MarketingCard>
+              </Reveal>
             ))}
           </div>
-        </div>
-      </section>
+        </MarketingContainer>
+      </MarketingSection>
 
-      <section id="features" className="scroll-mt-20 py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="text-center text-sm font-semibold uppercase tracking-wider text-[#8a8478] dark:text-[hsl(35_10%_52%)]">
-            Features
-          </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-2xl font-semibold tracking-tight text-[#1a1814] dark:text-white sm:text-3xl">
-            Everything you need to operate at a higher level.
-          </p>
+      <MarketingSection id="features" className="scroll-mt-20">
+        <MarketingContainer>
+          <div className="text-center">
+            <Reveal>
+              <MarketingKicker>Features</MarketingKicker>
+            </Reveal>
+            <Reveal className="mt-3">
+              <div className="mx-auto max-w-2xl">
+                <MarketingH2>Everything you need to operate at a higher level.</MarketingH2>
+              </div>
+            </Reveal>
+          </div>
           <ul className="mt-14 grid gap-6 sm:grid-cols-2">
             {features.map((f) => (
-              <li
-                key={f.title}
-                className="flex gap-4 rounded-2xl border border-[#e8e4dc] bg-white/60 p-6 dark:border-[hsl(35_10%_22%)] dark:bg-[hsl(28_14%_12%)]"
-              >
-                <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#1a1814] dark:bg-white" aria-hidden />
-                <div>
-                  <h3 className="font-semibold text-[#1a1814] dark:text-white">{f.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-[#5c574e] dark:text-[hsl(35_12%_70%)]">{f.desc}</p>
-                </div>
-              </li>
+              <Reveal key={f.title}>
+                <li className="h-full">
+                  <MarketingCard className="flex h-full gap-4 p-6 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-foreground/60" aria-hidden />
+                    <div>
+                      <h3 className="font-semibold text-foreground">{f.title}</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
+                    </div>
+                  </MarketingCard>
+                </li>
+              </Reveal>
             ))}
           </ul>
-        </div>
-      </section>
+        </MarketingContainer>
+      </MarketingSection>
     </>
   );
 }

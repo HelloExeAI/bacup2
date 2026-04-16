@@ -13,6 +13,7 @@ import { getAppOrigin, getAuthSiteOrigin } from "@/lib/marketing/urls";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchMyProfile } from "@/lib/supabase/queries";
 import { useUserStore } from "@/store/userStore";
+import { MarketingKicker, Reveal } from "@/components/marketing/primitives";
 
 type Mode = "signup" | "signin";
 
@@ -144,12 +145,16 @@ export function MarketingAuthForm({
 
   return (
     <div className="mx-auto w-full max-w-md px-4 py-16 sm:py-20">
-      <Card className="border-[#e8e4dc] bg-white/90 shadow-md dark:border-[hsl(35_10%_22%)] dark:bg-[hsl(28_14%_12%)]">
+      <Reveal>
+        <MarketingKicker>{mode === "signin" ? "Welcome back" : "Start here"}</MarketingKicker>
+      </Reveal>
+      <Reveal className="mt-3">
+        <Card className="border-border/70 bg-background/80 shadow-md">
         <CardHeader className="space-y-1">
-          <div className="text-lg font-semibold text-[#1a1814] dark:text-white">
-            {mode === "signin" ? "Welcome back" : "Create your account"}
+          <div className="text-lg font-semibold text-foreground">
+            {mode === "signin" ? "Sign in" : "Create your account"}
           </div>
-          <div className="text-sm text-[#5c574e] dark:text-[hsl(35_12%_70%)]">
+          <div className="text-sm text-muted-foreground">
             {mode === "signin"
               ? "Sign in to open your workspace."
               : `Start your ${FREE_TRIAL_DAYS}-day free trial in minutes.`}
@@ -159,19 +164,19 @@ export function MarketingAuthForm({
           <form onSubmit={onSubmit} className="space-y-3">
             {mode === "signup" ? (
               <div className="space-y-1">
-                <div className="text-sm font-medium text-[#1a1814] dark:text-white">Name</div>
+                <div className="text-sm font-medium text-foreground">Name</div>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   autoComplete="name"
                   placeholder="Your name"
-                  className="bg-white dark:bg-[hsl(28_14%_10%)]"
+                  className="bg-background"
                 />
               </div>
             ) : null}
 
             <div className="space-y-1">
-              <div className="text-sm font-medium text-[#1a1814] dark:text-white">Email</div>
+              <div className="text-sm font-medium text-foreground">Email</div>
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -179,12 +184,12 @@ export function MarketingAuthForm({
                 autoComplete="email"
                 placeholder="you@example.com"
                 required
-                className="bg-white dark:bg-[hsl(28_14%_10%)]"
+                className="bg-background"
               />
             </div>
 
             <div className="space-y-1">
-              <div className="text-sm font-medium text-[#1a1814] dark:text-white">Password</div>
+              <div className="text-sm font-medium text-foreground">Password</div>
               <Input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -192,18 +197,18 @@ export function MarketingAuthForm({
                 autoComplete={mode === "signin" ? "current-password" : "new-password"}
                 placeholder="••••••••"
                 required
-                className="bg-white dark:bg-[hsl(28_14%_10%)]"
+                className="bg-background"
               />
             </div>
 
             {error ? (
-              <div className="rounded-md border border-[#e8e4dc] bg-[#f3f1ec] px-3 py-2 text-sm text-[#1a1814] dark:border-[hsl(35_10%_26%)] dark:bg-[hsl(28_14%_14%)] dark:text-white">
+              <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm text-foreground">
                 {error}
               </div>
             ) : null}
 
             <Button
-              className="h-11 w-full rounded-full bg-[#1a1814] font-semibold text-white hover:opacity-90 dark:bg-white dark:text-[#1a1814]"
+              className="h-11 w-full rounded-full bg-foreground font-semibold text-background hover:opacity-90"
               disabled={loading || oauthLoading}
               type="submit"
             >
@@ -212,35 +217,35 @@ export function MarketingAuthForm({
 
             <div className="relative py-2">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-[#e8e4dc] dark:border-[hsl(35_10%_22%)]" />
+                <span className="w-full border-t border-border/70" />
               </div>
-              <div className="relative flex justify-center text-[11px] uppercase tracking-wide text-[#8a8478] dark:text-[hsl(35_10%_52%)]">
-                <span className="bg-white px-2 dark:bg-[hsl(28_14%_12%)]">Or</span>
+              <div className="relative flex justify-center text-[11px] uppercase tracking-wide text-muted-foreground">
+                <span className="bg-background px-2">Or</span>
               </div>
             </div>
 
             <Button
               type="button"
               variant="ghost"
-              className="h-11 w-full rounded-full border border-[#d4cfc4] font-medium dark:border-[hsl(35_10%_26%)]"
+              className="h-11 w-full rounded-full border border-border font-medium"
               disabled={loading || oauthLoading}
               onClick={() => void signInWithGoogle()}
             >
               {oauthLoading ? "Redirecting…" : "Continue with Google"}
             </Button>
 
-            <p className="pt-2 text-center text-sm text-[#5c574e] dark:text-[hsl(35_12%_70%)]">
+            <p className="pt-2 text-center text-sm text-muted-foreground">
               {mode === "signin" ? (
                 <>
                   New here?{" "}
-                  <a href="/signup" className="font-medium text-[#1a1814] underline-offset-4 hover:underline dark:text-white">
+                  <a href="/signup" className="font-medium text-foreground underline-offset-4 hover:underline">
                     Create an account
                   </a>
                 </>
               ) : (
                 <>
                   Already have an account?{" "}
-                  <a href="/signin" className="font-medium text-[#1a1814] underline-offset-4 hover:underline dark:text-white">
+                  <a href="/signin" className="font-medium text-foreground underline-offset-4 hover:underline">
                     Sign in
                   </a>
                 </>
@@ -249,6 +254,7 @@ export function MarketingAuthForm({
           </form>
         </CardContent>
       </Card>
+      </Reveal>
     </div>
   );
 }
