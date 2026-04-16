@@ -47,10 +47,12 @@ export function MeetingsNotes() {
   }, [children, selectedParentId]);
 
   return (
-    <div className="flex h-[calc(100dvh-6.75rem)] min-h-0 w-full flex-col overflow-hidden sm:h-[calc(100dvh-7.25rem)]">
+    <div className="flex h-[calc(100dvh-6.75rem)] min-h-0 w-full flex-col overflow-hidden font-sans sm:h-[calc(100dvh-7.25rem)]">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <div className="text-sm font-semibold text-foreground">Meetings</div>
-        <div className="text-[11px] text-muted-foreground">Transcripts are saved automatically when you stop recording.</div>
+        <div className="text-sm font-semibold tracking-tight text-foreground">Meetings</div>
+        <div className="hidden text-[11px] text-muted-foreground sm:block">
+          Transcripts save when you stop recording.
+        </div>
       </div>
 
       {loading ? <div className="p-3 text-xs text-muted-foreground">Loading…</div> : null}
@@ -99,16 +101,16 @@ export function MeetingsNotes() {
             <div className="p-4 text-sm text-muted-foreground">No sessions yet for this meeting.</div>
           ) : (
             <div className="h-full overflow-y-auto p-3">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {selectedParent.content}
               </div>
               <div className="space-y-3">
                 {sessions.map((s) => (
                   <div key={s.id} className="rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm">
                     <div className="text-[10px] text-muted-foreground">{new Date(s.created_at).toLocaleString()}</div>
-                    <pre className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                    <div className="mt-2 whitespace-pre-wrap text-sm font-sans leading-relaxed tracking-normal text-foreground antialiased">
                       {s.content}
-                    </pre>
+                    </div>
                   </div>
                 ))}
               </div>

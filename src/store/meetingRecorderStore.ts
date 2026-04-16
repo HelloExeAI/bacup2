@@ -43,7 +43,6 @@ export const useMeetingRecorderStore = create<MeetingRecorderState>((set, get) =
   startSession: (calendar_title) => {
     const started_at = new Date().toISOString();
     set({
-      mode: "expanded",
       session: {
         started_at,
         calendar_title,

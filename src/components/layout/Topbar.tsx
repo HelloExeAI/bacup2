@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { AppNotificationBell } from "@/components/notifications/AppNotificationBell";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useAskBacupStore } from "@/store/askBacupStore";
@@ -54,14 +54,24 @@ function SettingsIcon3D() {
   );
 }
 
-function isNavActive(pathname: string | null, href: string): boolean {
+function isNavActive(
+  pathname: string | null,
+  href: string,
+  scratchpadView: string | null | undefined,
+): boolean {
   if (!pathname) return false;
+  if (href === "/scratchpad?view=meetings") {
+    return pathname === "/scratchpad" && scratchpadView === "meetings";
+  }
+  if (href === "/scratchpad") {
+    return pathname === "/scratchpad" && scratchpadView !== "meetings";
+  }
   if (href === "/dashboard") return pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   if (href === "/workspace" || href === "/my-view") return pathname === href;
   return pathname === href;
 }
 
-function TopbarNavMenuButton() {
+function TopbarNavMenuButtonContent({ scratchpadView }: { scratchpadView: string | null }) {
   const pathname = usePathname();
   const { canUseBusinessOs, ready } = useSubscriptionTier();
   const navLinks = React.useMemo(() => {
@@ -69,6 +79,7 @@ function TopbarNavMenuButton() {
       { href: "/dashboard", label: "Dashboard" },
       { href: "/calendar", label: "Calendar" },
       { href: "/scratchpad", label: "Scratchpad" },
+      { href: "/scratchpad?view=meetings", label: "Meetings" },
     ];
     if (!ready) {
       return [{ href: "/my-view", label: "My View" }, ...tail];
@@ -149,7 +160,7 @@ function TopbarNavMenuButton() {
         </div>
         <ul className="p-1">
           {navLinks.map((item) => {
-            const active = isNavActive(pathname, item.href);
+            const active = isNavActive(pathname, item.href, scratchpadView);
             return (
               <li key={item.href} role="none">
                 <Link
@@ -171,6 +182,20 @@ function TopbarNavMenuButton() {
         </ul>
       </div>
     </div>
+  );
+}
+
+function TopbarNavMenuButtonSuspended() {
+  const searchParams = useSearchParams();
+  const scratchpadView = searchParams.get("view");
+  return <TopbarNavMenuButtonContent scratchpadView={scratchpadView} />;
+}
+
+function TopbarNavMenuButton() {
+  return (
+    <React.Suspense fallback={<TopbarNavMenuButtonContent scratchpadView={null} />}>
+      <TopbarNavMenuButtonSuspended />
+    </React.Suspense>
   );
 }
 

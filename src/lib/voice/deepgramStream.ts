@@ -43,6 +43,9 @@ export async function startDeepgramStream(opts: {
       ? await (navigator.mediaDevices as any).getDisplayMedia?.({ audio: true, video: false })
       : await navigator.mediaDevices.getUserMedia({ audio: true });
 
+  let closedByClient = false;
+  let keepAliveId: number | null = null;
+
   const ws = new WebSocket(DG_URL, [protocol, token]);
 
   let recorder: MediaRecorder | null = null;
@@ -54,6 +57,12 @@ export async function startDeepgramStream(opts: {
   const combinedText = () => normalizeChunk(`${transcript}${live ? (transcript ? " " : "") + live : ""}`);
 
   const stop = async () => {
+    closedByClient = true;
+    if (keepAliveId != null) {
+      clearInterval(keepAliveId);
+      keepAliveId = null;
+    }
+
     onEvent({ kind: "listening", listening: false });
 
     try {
@@ -78,7 +87,7 @@ export async function startDeepgramStream(opts: {
       /* ignore */
     }
     try {
-      ws.close();
+      ws.close(1000);
     } catch {
       /* ignore */
     }
@@ -95,14 +104,39 @@ export async function startDeepgramStream(opts: {
     return combinedText();
   };
 
-  ws.onerror = () => onEvent({ kind: "error", message: "Deepgram WebSocket error." });
+  ws.onerror = () => {
+    if (closedByClient) return;
+    onEvent({ kind: "error", message: "Deepgram WebSocket error." });
+  };
   ws.onclose = (evt) => {
+    if (keepAliveId != null) {
+      clearInterval(keepAliveId);
+      keepAliveId = null;
+    }
+    if (closedByClient) return;
     if (evt.code === 1000) return;
-    onEvent({ kind: "error", message: `Deepgram closed (${evt.code}) ${evt.reason || ""}`.trim() });
+    const detail = evt.reason?.trim();
+    const hint =
+      evt.code === 1005
+        ? "Connection dropped (often network, quota, or idle timeout). Check Deepgram quota and try again."
+        : "Transcription stopped unexpectedly.";
+    onEvent({
+      kind: "error",
+      message: [hint, detail ? `(${evt.code}) ${detail}` : `(${evt.code})`].filter(Boolean).join(" "),
+    });
   };
 
   ws.onopen = () => {
     onEvent({ kind: "listening", listening: true });
+    keepAliveId = window.setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: "KeepAlive" }));
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 4000);
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
     recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     recorder.ondataavailable = (evt) => {

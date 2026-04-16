@@ -35,7 +35,6 @@ function bestCalendarTitle(events: ReturnType<typeof useEventStore.getState>["ev
     const score = diff;
     if (!best || score < best.score) best = { title: String(e.title), score };
   }
-  // Within ~90 minutes counts as “relevant”.
   if (best && best.score <= 90) return best.title.slice(0, 300);
   return null;
 }
@@ -177,13 +176,16 @@ export function MeetingRecorderDock() {
     ? "fixed bottom-4 right-4 z-[90] w-[min(92vw,22rem)] rounded-2xl border border-border bg-background/95 shadow-[0_16px_55px_rgba(0,0,0,0.22)] backdrop-blur"
     : "fixed inset-0 z-[90] flex items-end justify-center p-4 sm:items-center";
 
+  const miniStatus =
+    listening ? `Recording · ${elapsed}` : session?.started_at ? "Ready to record" : "Ready to record";
+
   return (
     <div className={wrapClass} aria-label="Meeting recorder">
       {!isMin ? (
         <button
           type="button"
           className="absolute inset-0 bg-black/30"
-          aria-label="Close"
+          aria-label="Dismiss"
           onClick={() => {
             if (listening) minimize();
             else close();
@@ -193,7 +195,7 @@ export function MeetingRecorderDock() {
 
       <div
         className={[
-          "relative w-full overflow-hidden rounded-2xl border border-border bg-background/98",
+          "relative w-full overflow-hidden rounded-2xl border border-border bg-background/98 font-sans",
           !isMin ? "max-w-[min(920px,calc(100vw-24px))]" : "",
         ].join(" ")}
       >
@@ -206,7 +208,7 @@ export function MeetingRecorderDock() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {listening ? (
+            {!isMin ? (
               <Button type="button" size="sm" variant="ghost" className="h-8 border border-border/60" onClick={minimize}>
                 Minimize
               </Button>
@@ -229,12 +231,12 @@ export function MeetingRecorderDock() {
             <select
               className="h-9 rounded-md border border-border bg-background px-2 text-sm"
               value={source}
-              onChange={(e) => setSource(e.target.value as any)}
+              onChange={(e) => setSource(e.target.value as "smart" | "mic" | "tab")}
               disabled={listening}
             >
-              <option value="smart">Smart</option>
-              <option value="mic">Mic</option>
-              <option value="tab">Tab audio</option>
+              <option value="smart">Mic + browser</option>
+              <option value="mic">Mic only</option>
+              <option value="tab">Browser tab only</option>
             </select>
             <div className="flex-1" />
             {!listening ? (
@@ -249,53 +251,37 @@ export function MeetingRecorderDock() {
           </div>
 
           {!isMin ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Live transcript
-                </div>
-                <div className="mt-2 max-h-[42vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                  {liveCombined || "…"}
-                </div>
+            <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Live transcript
               </div>
-              <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Tips
-                </div>
-                <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
-                  <li>Speak clearly; keep mic near you.</li>
-                  <li>Use “Tab audio” to capture calls when your browser supports it.</li>
-                  <li>When you stop, Bacup saves the transcript and creates unassigned action tasks.</li>
-                </ul>
+              <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto whitespace-pre-wrap text-sm font-sans leading-relaxed text-foreground antialiased">
+                {liveCombined || "…"}
               </div>
             </div>
           ) : (
-            <div className="px-4 pb-4">
-              <div className="mt-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                {listening ? "Recording…" : "Paused"}
+            <div className="pb-3 pt-2">
+              <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                {miniStatus}
               </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
                 <Button type="button" size="sm" variant="ghost" className="h-8 border border-border/60" onClick={expand}>
                   Expand
                 </Button>
-                <Button type="button" size="sm" onClick={() => void stopAndSave()} disabled={stopping || !listening}>
-                  {stopping ? "Stopping…" : "Stop"}
-                </Button>
+                {!listening ? (
+                  <Button type="button" size="sm" onClick={() => void start()}>
+                    Start
+                  </Button>
+                ) : (
+                  <Button type="button" size="sm" onClick={() => void stopAndSave()} disabled={stopping || !listening}>
+                    {stopping ? "Stopping…" : "Stop"}
+                  </Button>
+                )}
               </div>
             </div>
           )}
         </div>
       </div>
-
-      {!isMin ? (
-        <button
-          type="button"
-          aria-label="Open meeting recorder"
-          className="hidden"
-          onClick={open}
-        />
-      ) : null}
     </div>
   );
 }
-

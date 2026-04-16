@@ -310,12 +310,12 @@ export function WatchListModal({
     return `Completed ${y}-${m}-${day} ${hh}:${mm}`;
   };
 
-  /** Same shell as Today’s Focus expanded panel everywhere (sidebar + filtered views). */
+  /** Centered modal shell (viewport-centered; avoids drifting with layout reflows). */
   const panelShell =
-    "absolute left-1/2 top-8 z-10 w-[min(760px,calc(100vw-24px))] -translate-x-1/2 overflow-hidden rounded-xl bg-background shadow-[0_1px_0_rgba(70,54,39,0.05),0_12px_40px_rgba(61,45,33,0.14)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.55)]";
+    "relative z-10 w-full max-w-[760px] overflow-hidden rounded-xl bg-background shadow-[0_1px_0_rgba(70,54,39,0.05),0_12px_40px_rgba(61,45,33,0.14)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.55)]";
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
         aria-label="Close watch list"
