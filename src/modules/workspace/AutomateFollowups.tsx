@@ -26,14 +26,38 @@ function isEmail(s: string): boolean {
 }
 
 function formatTaskMeta(t: Task): string {
+  const assignee = (t.assigned_to ?? "").trim();
+  const assigneeBit =
+    assignee && assignee.toLowerCase() !== "self" ? assignee : assignee === "" ? "Unassigned" : null;
   const due = [t.due_date, t.due_time].filter(Boolean).join(" ");
-  const bits = [t.type, due].filter(Boolean);
+  const bits = [assigneeBit, t.type, due].filter(Boolean);
   return bits.join(" · ");
+}
+
+/** Automate Followups: show others or unassigned; hide tasks explicitly assigned to self. */
+function includeInAutomateFollowups(t: Task): boolean {
+  const a = (t.assigned_to ?? "").trim();
+  if (a.toLowerCase() === "self") return false;
+  return true;
+}
+
+function assigneeSortKey(t: Task): string {
+  const a = (t.assigned_to ?? "").trim();
+  if (a === "") return "\uffff";
+  return a.toLowerCase();
 }
 
 export function AutomateFollowups() {
   const tasks = useTaskStore((s) => s.tasks);
-  const openTasks = React.useMemo(() => tasks.filter((t) => t.status === "pending"), [tasks]);
+  const followupTasks = React.useMemo(() => {
+    const open = tasks.filter((t) => t.status === "pending").filter(includeInAutomateFollowups);
+    return [...open].sort((a, b) => {
+      const ak = assigneeSortKey(a);
+      const bk = assigneeSortKey(b);
+      if (ak !== bk) return ak.localeCompare(bk);
+      return a.title.localeCompare(b.title);
+    });
+  }, [tasks]);
 
   const [open, setOpen] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
@@ -78,13 +102,13 @@ export function AutomateFollowups() {
   }, []);
 
   const openModalForTask = (taskId: string) => {
-    const initial = new Set(openTasks.map((t) => t.id));
+    const initial = new Set(followupTasks.map((t) => t.id));
     if (taskId) initial.add(taskId);
     setSelectedIds(initial);
     setChannel(defaultChannel);
     if (!fromAccountId && googleAccounts.length > 0) setFromAccountId(googleAccounts[0]!.id);
     const blankRecipients: Record<string, string> = {};
-    for (const t of openTasks) blankRecipients[t.id] = "";
+    for (const t of followupTasks) blankRecipients[t.id] = "";
     setRecipientByTaskId(blankRecipients);
     setMessage("");
     setErr(null);
@@ -97,7 +121,7 @@ export function AutomateFollowups() {
     setErr(null);
     setNotice(null);
     try {
-      const selectedList = openTasks.filter((t) => selectedIds.has(t.id));
+      const selectedList = followupTasks.filter((t) => selectedIds.has(t.id));
       if (selectedList.length === 0) throw new Error("Select at least one task.");
       if (!message.trim()) throw new Error("Write a short update message.");
 
@@ -171,26 +195,26 @@ export function AutomateFollowups() {
     }
   };
 
-  const selectedTasks = openTasks.filter((t) => selectedIds.has(t.id));
+  const selectedTasks = followupTasks.filter((t) => selectedIds.has(t.id));
 
   return (
     <div className="mt-4 rounded-xl border border-border/60 bg-background/60 px-4 py-3 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Automate Followups</h3>
-        <span className="text-[10px] tabular-nums text-muted-foreground">{openTasks.length} open</span>
+        <span className="text-[10px] tabular-nums text-muted-foreground">{followupTasks.length} open</span>
       </div>
 
       <p className="mt-1 text-xs text-muted-foreground">
-        All open tasks. Recipients are grouped automatically: one message per person with every task they owe you an
-        update on.
+        Open tasks sorted by assignee (self-assigned items are hidden). Recipients are grouped automatically: one message
+        per person with every task they owe you an update on.
       </p>
 
       {notice ? <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
-      {openTasks.length === 0 ? (
-        <p className="mt-3 text-xs text-muted-foreground">Nothing open.</p>
+      {followupTasks.length === 0 ? (
+        <p className="mt-3 text-xs text-muted-foreground">Nothing to follow up here yet.</p>
       ) : (
         <ul className="mt-3 space-y-2">
-          {openTasks.map((t) => (
+          {followupTasks.map((t) => (
             <li
               key={t.id}
               className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between"
@@ -208,15 +232,15 @@ export function AutomateFollowups() {
       )}
 
       {open ? (
-        <div className="fixed inset-0 z-[75] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[75] flex items-start justify-center overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))]">
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-black/40"
+            className="fixed inset-0 bg-black/40"
             onClick={() => (saving ? null : setOpen(false))}
           />
-          <div className="relative z-10 w-full max-w-[720px] rounded-2xl border border-border bg-background p-4 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
+          <div className="relative z-10 flex max-h-[min(90dvh,calc(100dvh-2rem))] w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
               <div>
                 <div className="text-sm font-semibold text-foreground">Follow up</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
@@ -229,13 +253,14 @@ export function AutomateFollowups() {
               </Button>
             </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
             {err ? (
-              <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-xs text-red-800 dark:text-red-200">
+              <div className="mb-3 rounded-md border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-xs text-red-800 dark:text-red-200">
                 {err}
               </div>
             ) : null}
 
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Communication channel
@@ -304,7 +329,7 @@ export function AutomateFollowups() {
                 Pending tasks to follow up on
               </div>
               <div className="max-h-40 overflow-y-auto rounded-md border border-border/60 bg-muted/10 p-2">
-                {openTasks.map((t) => {
+                {followupTasks.map((t) => {
                   const checked = selectedIds.has(t.id);
                   return (
                     <label key={t.id} className="flex cursor-pointer items-start gap-2 py-1 text-xs">
@@ -342,7 +367,7 @@ export function AutomateFollowups() {
                   ? "One or more emails per task (comma-separated). The same person on multiple tasks gets a single consolidated email."
                   : "WhatsApp and Slack sending is coming next — identifiers are collected for when those channels ship."}
               </p>
-              <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border/60 bg-muted/10 p-2">
+              <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-border/60 bg-muted/10 p-2">
                 {selectedTasks.length === 0 ? (
                   <div className="text-xs text-muted-foreground">Select at least one task above.</div>
                 ) : (
@@ -361,8 +386,9 @@ export function AutomateFollowups() {
                 )}
               </div>
             </div>
+            </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-background px-4 py-3">
               <Button type="button" variant="ghost" disabled={saving} onClick={() => setOpen(false)}>
                 Cancel
               </Button>
