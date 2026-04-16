@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { ASSIGNEE_FOLLOWUP_TOKEN_TTL_MS, mintAssigneeFollowupToken } from "@/lib/followups/assigneeFollowupToken";
 import { renderFollowupTemplate } from "@/lib/followups/renderTemplate";
 import { sendGmailNewPlainMessage } from "@/lib/integrations/google/gmailSendNewPlain";
+import { defaultSiteOrigin } from "@/lib/site";
 import { capturePostHogServerEvent } from "@/lib/posthog-server";
 import { normalizeUserSettingsRow } from "@/modules/settings/normalizeUserSettings";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -161,6 +163,23 @@ export async function POST(req: Request) {
     const primaryTitle = titles[0] ?? "Follow up";
     const taskCount = String(titles.length);
 
+    let assignee_update_url = "";
+    const { token: followupToken, tokenHash } = mintAssigneeFollowupToken();
+    const { error: tokErr } = await supabase.from("assignee_followup_tokens").insert({
+      owner_user_id: user.id,
+      assignee_email: to,
+      task_ids: taskIds,
+      token_hash: tokenHash,
+      expires_at: new Date(Date.now() + ASSIGNEE_FOLLOWUP_TOKEN_TTL_MS).toISOString(),
+    });
+    if (!tokErr) {
+      assignee_update_url = `${defaultSiteOrigin()}/a/f/${encodeURIComponent(followupToken)}`;
+    }
+
+    const assignee_update_sentence = assignee_update_url
+      ? `You can also update status here (no login): ${assignee_update_url}`
+      : "";
+
     const vars = {
       user_message: userMessage,
       task_bullets: taskBullets,
@@ -169,10 +188,14 @@ export async function POST(req: Request) {
       recipient_greeting: recipientGreeting(to),
       recipient_email: to,
       sender_name: senderName,
+      assignee_update_url,
+      assignee_update_sentence,
     };
 
     const subject = renderFollowupTemplate(settings.followup_email_subject_template, vars).trim() || "Follow up";
-    const textPlain = renderFollowupTemplate(settings.followup_email_body_template, vars).trim();
+    const textPlain = renderFollowupTemplate(settings.followup_email_body_template, vars)
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
 
     const sendRes = await sendGmailNewPlainMessage({
       supabase,

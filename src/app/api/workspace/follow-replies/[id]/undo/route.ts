@@ -25,10 +25,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   if (fe || !ev) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (ev.undone_at) return NextResponse.json({ error: "Already undone" }, { status: 400 });
-  if (ev.intent === "noop") {
-    await supabase.from("follow_reply_events").update({ undone_at: new Date().toISOString() }).eq("id", id);
-    return NextResponse.json({ ok: true });
-  }
 
   const taskId = ev.task_id as string | null;
   if (!taskId) return NextResponse.json({ error: "No task" }, { status: 400 });

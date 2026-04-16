@@ -20,7 +20,9 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("follow_reply_events")
-    .select("id,task_id,intent,raw_text,from_email_preview,created_at,undone_at,task_updates_applied")
+    .select(
+      "id,task_id,intent,status_label,source,raw_text,from_email_preview,created_at,undone_at,task_updates_applied",
+    )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(limit);

@@ -1,6 +1,7 @@
 /** Paths allowed without a Supabase session (must stay in sync with middleware). */
 const ALLOW_UNAUTHED = [
   "/",
+  "/a",
   "/pricing",
   "/signin",
   "/signup",

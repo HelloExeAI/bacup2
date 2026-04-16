@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fetchGmailThreadMessages } from "@/lib/integrations/google/gmailThreadFetch";
 import { getValidGoogleAccessToken } from "@/lib/integrations/google/googleAccessToken";
+import { formatFollowReplyDescriptionAppend } from "@/lib/workspace/followReplyComment";
 import { parseFollowReplyText } from "@/lib/workspace/followReplyParse";
 
 type TaskSnap = {
@@ -175,7 +176,24 @@ export async function runFollowReplyIngestTick(admin: SupabaseClient): Promise<{
         completed_by_name: task.completed_by_name ?? null,
       };
 
+      const commentBlock = formatFollowReplyDescriptionAppend(parsed.status_label, reply.text);
+
       if (parsed.intent === "noop") {
+        const nextDescription = `${before.description ?? ""}\n\n${commentBlock}`.trim();
+        const { error: upNoop } = await admin
+          .from("tasks")
+          .update({
+            description: nextDescription,
+            last_edited_by_name: "Email reply",
+          })
+          .eq("id", raw.task_id)
+          .eq("user_id", raw.user_id);
+
+        if (upNoop) {
+          errors += 1;
+          continue;
+        }
+
         const { error: insNoop } = await admin.from("follow_reply_events").insert({
           user_id: raw.user_id,
           task_id: raw.task_id,
@@ -186,11 +204,24 @@ export async function runFollowReplyIngestTick(admin: SupabaseClient): Promise<{
           from_email_preview: reply.fromEmail.slice(0, 320),
           raw_text: reply.text.slice(0, 8000),
           intent: "noop",
+          status_label: parsed.status_label,
+          source: "email_reply",
           task_snapshot_before: before as unknown as Record<string, unknown>,
-          task_updates_applied: {},
+          task_updates_applied: { description: nextDescription },
         });
-        if (insNoop) errors += 1;
-        else noopRecorded += 1;
+        if (insNoop) {
+          errors += 1;
+          await admin
+            .from("tasks")
+            .update({
+              description: before.description,
+              last_edited_by_name: null,
+            })
+            .eq("id", raw.task_id)
+            .eq("user_id", raw.user_id);
+          continue;
+        }
+        noopRecorded += 1;
         continue;
       }
 
@@ -201,15 +232,17 @@ export async function runFollowReplyIngestTick(admin: SupabaseClient): Promise<{
         updates.status = "done";
         updates.completed_at = new Date().toISOString();
         updates.completed_by_name = "Email reply";
-        taskUpdates = { status: "done" };
+        updates.description = `${before.description ?? ""}\n\n${commentBlock}`.trim();
+        updates.last_edited_by_name = "Email reply";
+        taskUpdates = { status: "done", description: updates.description };
       } else if (parsed.intent === "reassigned" && parsed.reassignTo) {
         const next = parsed.reassignTo.trim().slice(0, 120);
         updates.assigned_to = next;
         updates.last_edited_by_name = "Email reply";
-        taskUpdates = { assigned_to: next };
+        updates.description = `${before.description ?? ""}\n\n${commentBlock}`.trim();
+        taskUpdates = { assigned_to: next, description: updates.description };
       } else if (parsed.intent === "in_progress") {
-        const stamp = `[Follow-up reply ${new Date().toISOString().slice(0, 16)}] In progress.`;
-        updates.description = `${before.description ?? ""}\n\n${stamp}`.trim();
+        updates.description = `${before.description ?? ""}\n\n${commentBlock}`.trim();
         updates.last_edited_by_name = "Email reply";
         taskUpdates = { description: updates.description };
       }
@@ -244,6 +277,8 @@ export async function runFollowReplyIngestTick(admin: SupabaseClient): Promise<{
         from_email_preview: reply.fromEmail.slice(0, 320),
         raw_text: reply.text.slice(0, 8000),
         intent: parsed.intent,
+        status_label: parsed.status_label,
+        source: "email_reply",
         task_snapshot_before: before as unknown as Record<string, unknown>,
         task_updates_applied: taskUpdates,
       });

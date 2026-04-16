@@ -142,6 +142,18 @@ type EmailNotifRow = {
   bucket_date: string;
 };
 
+type FollowReplyNotifRow = {
+  id: string;
+  task_id: string | null;
+  status_label: string;
+  source: string;
+  intent: string;
+  raw_text: string;
+  from_email_preview: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
 type BellSize = "default" | "compact" | "topbar";
 
 /**
@@ -181,6 +193,7 @@ export function AppNotificationBell({
   const prevOpenRef = React.useRef(false);
   const [now, setNow] = React.useState(() => new Date());
   const [emailRows, setEmailRows] = React.useState<EmailNotifRow[]>([]);
+  const [followReplyRows, setFollowReplyRows] = React.useState<FollowReplyNotifRow[]>([]);
 
   const loadEmailNotifications = React.useCallback(async () => {
     try {
@@ -188,6 +201,18 @@ export function AppNotificationBell({
       const j = (await res.json().catch(() => null)) as { notifications?: unknown } | null;
       if (res.ok && Array.isArray(j?.notifications)) {
         setEmailRows(j.notifications as EmailNotifRow[]);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const loadFollowReplyNotifications = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/follow-reply-notifications", { cache: "no-store" });
+      const j = (await res.json().catch(() => null)) as { notifications?: unknown } | null;
+      if (res.ok && Array.isArray(j?.notifications)) {
+        setFollowReplyRows(j.notifications as FollowReplyNotifRow[]);
       }
     } catch {
       /* ignore */
@@ -202,9 +227,13 @@ export function AppNotificationBell({
   React.useEffect(() => {
     if (!user) return;
     void loadEmailNotifications();
-    const id = window.setInterval(() => void loadEmailNotifications(), 90_000);
+    void loadFollowReplyNotifications();
+    const id = window.setInterval(() => {
+      void loadEmailNotifications();
+      void loadFollowReplyNotifications();
+    }, 90_000);
     return () => window.clearInterval(id);
-  }, [user, loadEmailNotifications]);
+  }, [user, loadEmailNotifications, loadFollowReplyNotifications]);
 
   const feed = React.useMemo(() => buildFeed(tasks, now), [tasks, now]);
 
@@ -223,7 +252,13 @@ export function AppNotificationBell({
     [emailRows],
   );
 
-  const showBadge = unreadCompletions > 0 || unreadOverdue || unreadEmailCount > 0;
+  const unreadFollowReplyCount = React.useMemo(
+    () => followReplyRows.filter((r) => !r.read_at).length,
+    [followReplyRows],
+  );
+
+  const showBadge =
+    unreadCompletions > 0 || unreadOverdue || unreadEmailCount > 0 || unreadFollowReplyCount > 0;
 
   const prevBadgeRef = React.useRef<boolean | null>(null);
   React.useEffect(() => {
@@ -249,6 +284,14 @@ export function AppNotificationBell({
         body: JSON.stringify({ markAll: true }),
       }).then(() => {
         setEmailRows((rows) => rows.map((r) => ({ ...r, read_at: r.read_at ?? t.toISOString() })));
+      });
+      void fetch("/api/follow-reply-notifications", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAll: true }),
+      }).then(() => {
+        setFollowReplyRows((rows) => rows.map((r) => ({ ...r, read_at: r.read_at ?? t.toISOString() })));
       });
     }
     prevOpenRef.current = open;
@@ -279,7 +322,10 @@ export function AppNotificationBell({
           const next = await fetchMyTasks(supabase);
           if (!cancelled) setTasks(next);
         }
-        if (!cancelled) void loadEmailNotifications();
+        if (!cancelled) {
+          void loadEmailNotifications();
+          void loadFollowReplyNotifications();
+        }
       } catch {
         /* keep existing store / scope */
       }
@@ -287,7 +333,15 @@ export function AppNotificationBell({
     return () => {
       cancelled = true;
     };
-  }, [isDashboardPath, open, setDashboardScopeTasks, setTasks, user, loadEmailNotifications]);
+  }, [
+    isDashboardPath,
+    open,
+    setDashboardScopeTasks,
+    setTasks,
+    user,
+    loadEmailNotifications,
+    loadFollowReplyNotifications,
+  ]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -309,6 +363,11 @@ export function AppNotificationBell({
         ? "relative flex h-10 w-10 shrink-0 items-center justify-center overflow-visible rounded-md bg-transparent text-foreground transition-[transform,colors] hover:bg-muted/60 active:scale-[0.97]"
         : "relative flex h-9 w-9 shrink-0 items-center justify-center overflow-visible rounded-full border border-border bg-transparent text-foreground hover:bg-muted/60";
 
+  const openFollowReply = (_row: FollowReplyNotifRow) => {
+    router.push("/dashboard");
+    setOpen(false);
+  };
+
   const openEmail = (row: EmailNotifRow) => {
     const q = new URLSearchParams({
       gmailMessageId: row.message_id,
@@ -318,9 +377,10 @@ export function AppNotificationBell({
     setOpen(false);
   };
 
+  const hasFollowReplies = followReplyRows.length > 0;
   const hasEmail = emailRows.length > 0;
   const hasTaskFeed = feed.length > 0;
-  const empty = !hasEmail && !hasTaskFeed;
+  const empty = !hasFollowReplies && !hasEmail && !hasTaskFeed;
 
   return (
     <div className={["relative", className].filter(Boolean).join(" ")} ref={wrapRef}>
@@ -349,8 +409,51 @@ export function AppNotificationBell({
               <li className="px-1 py-2 text-xs text-muted-foreground">No notifications yet.</li>
             ) : null}
 
-            {hasEmail ? (
+            {hasFollowReplies ? (
               <li className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Follow-up updates
+              </li>
+            ) : null}
+            {followReplyRows.map((row) => {
+              const src = row.source === "web_link" ? "Link" : "Email";
+              const preview =
+                row.raw_text.trim().slice(0, 200) + (row.raw_text.length > 200 ? "…" : "");
+              return (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    onClick={() => openFollowReply(row)}
+                    className={[
+                      "w-full rounded-lg border px-2 py-1.5 text-left transition-colors",
+                      row.read_at
+                        ? "border-border/50 bg-muted/25 dark:bg-muted/15"
+                        : "border-violet-500/35 bg-violet-50/90 dark:bg-violet-500/10",
+                    ].join(" ")}
+                  >
+                    <div className="text-xs font-medium leading-snug text-foreground line-clamp-2">
+                      {row.status_label} · {src}
+                      {row.from_email_preview ? (
+                        <span className="font-normal text-muted-foreground"> · {row.from_email_preview}</span>
+                      ) : null}
+                    </div>
+                    {preview ? (
+                      <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{preview}</div>
+                    ) : null}
+                    <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
+                      {formatWhen(new Date(row.created_at))}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+
+            {hasEmail ? (
+              <li
+                className={[
+                  "px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground",
+                  hasFollowReplies ? "pt-2" : "",
+                ].join(" ")}
+              >
                 Today&apos;s mail
               </li>
             ) : null}
@@ -377,7 +480,7 @@ export function AppNotificationBell({
               </li>
             ))}
 
-            {hasEmail && hasTaskFeed ? (
+            {(hasFollowReplies || hasEmail) && hasTaskFeed ? (
               <li className="px-1 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Tasks
               </li>

@@ -31,6 +31,8 @@ type LogRow = {
 type ReplyEventRow = {
   id: string;
   intent: string;
+  status_label: string;
+  source: string;
   raw_text: string;
   from_email_preview: string | null;
   created_at: string;
@@ -383,7 +385,12 @@ export function FollowAutomationTab({ googleAccounts }: { googleAccounts: Connec
             {replyEvents.map((ev) => (
               <li key={ev.id} className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-foreground">{ev.intent}</span>
+                  <span className="font-medium text-foreground">
+                    {ev.status_label}
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      ({ev.source === "web_link" ? "link" : "email"} · {ev.intent})
+                    </span>
+                  </span>
                   <span className="text-[10px] text-muted-foreground">
                     {new Date(ev.created_at).toLocaleString()}
                     {ev.undone_at ? " · undone" : ""}
@@ -396,7 +403,7 @@ export function FollowAutomationTab({ googleAccounts }: { googleAccounts: Connec
                   {ev.raw_text.slice(0, 600)}
                   {ev.raw_text.length > 600 ? "…" : ""}
                 </pre>
-                {!ev.undone_at && ev.intent !== "noop" ? (
+                {!ev.undone_at ? (
                   <Button type="button" size="sm" variant="ghost" className="mt-2" onClick={() => void undoReply(ev.id)}>
                     Undo task change
                   </Button>

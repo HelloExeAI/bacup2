@@ -1299,8 +1299,12 @@ export function SettingsModal({
                   <p className="text-[11px] text-muted-foreground">
                     Conversational, interactive tone works best. Placeholders:{" "}
                     <span className="font-mono text-[10px]">
-                      {"{{user_message}} {{task_bullets}} {{task_count}} {{recipient_greeting}} {{recipient_email}} {{primary_task_title}} {{sender_name}}"}
+                      {
+                        "{{user_message}} {{task_bullets}} {{task_count}} {{recipient_greeting}} {{recipient_email}} {{primary_task_title}} {{sender_name}} {{assignee_update_url}} {{assignee_update_sentence}}"
+                      }
                     </span>
+                    . <span className="font-mono text-[10px]">{"{{assignee_update_sentence}}"}</span> is empty if the
+                    update link cannot be created; recipients can still reply by email.
                   </p>
                   <div className="space-y-1">
                     <div className="text-xs font-medium text-foreground">Subject</div>
