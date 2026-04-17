@@ -6,14 +6,14 @@ export type DeepgramStreamEvent =
 
 export type DeepgramSource = "mic" | "tab";
 
-function buildDeepgramListenUrl(language: string): string {
+function buildDeepgramListenUrl(): string {
   const params = new URLSearchParams({
     model: "nova-3",
+    language: "en",
     punctuate: "true",
     smart_format: "true",
     interim_results: "true",
     diarize: "true",
-    language: language.trim() || "multi",
   });
   return `wss://api.deepgram.com/v1/listen?${params.toString()}`;
 }
@@ -50,7 +50,7 @@ function formatDiarizedWords(words: WordPiece[]): string {
 }
 
 /** If the newest block continues the same person as the last line of `prev`, merge into that line. */
-export function mergeLabeledBlocks(prev: string, block: string): string {
+function mergeLabeledBlocks(prev: string, block: string): string {
   const p = prev.trim();
   const b = block.trim();
   if (!p) return b;
@@ -79,7 +79,7 @@ export function mergeLabeledBlocks(prev: string, block: string): string {
   return `${p}\n${b}`;
 }
 
-export function combinedDisplay(transcript: string, live: string): string {
+function combinedDisplay(transcript: string, live: string): string {
   const t = transcript.trim();
   const l = live.trim();
   if (!t) return l;
@@ -92,16 +92,11 @@ export async function startDeepgramStream(opts: {
   onEvent: (e: DeepgramStreamEvent) => void;
   /** If provided, use as Deepgram bearer/token. Otherwise fetch from /api/deepgram/token. */
   deepgramToken?: string;
-  /**
-   * Deepgram `language` param. Use `multi` so supported languages are auto-detected.
-   * @see https://developers.deepgram.com/docs/language
-   */
-  language?: string;
 }): Promise<{
   stop: () => Promise<string>;
 }> {
   const { source, onEvent } = opts;
-  const wsUrl = buildDeepgramListenUrl(opts.language ?? "multi");
+  const wsUrl = buildDeepgramListenUrl();
   onEvent({ kind: "error", message: "" }); // allow caller to clear error by handling empty
 
   const getToken = async (): Promise<string> => {
