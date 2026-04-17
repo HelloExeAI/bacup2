@@ -53,6 +53,14 @@ export function MeetingsNotes() {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const searchReqSeq = React.useRef(0);
+  const [searchRemote, setSearchRemote] = React.useState<{
+    query: string;
+    parents: ParentRow[];
+    children: ChildRow[];
+  } | null>(null);
+  const [searchLoading, setSearchLoading] = React.useState(false);
+  const [searchErr, setSearchErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -89,6 +97,49 @@ export function MeetingsNotes() {
       return () => window.clearTimeout(t);
     }
   }, [searchOpen]);
+
+  React.useEffect(() => {
+    const raw = searchQuery.trim();
+    if (raw.length < 2) {
+      setSearchRemote(null);
+      setSearchErr(null);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchErr(null);
+    const seq = ++searchReqSeq.current;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/meetings?search=${encodeURIComponent(raw)}`, {
+            cache: "no-store",
+            credentials: "include",
+          });
+          const j = (await res.json().catch(() => null)) as {
+            parents?: ParentRow[];
+            children?: ChildRow[];
+            error?: string;
+          } | null;
+          if (seq !== searchReqSeq.current) return;
+          if (!res.ok) throw new Error(typeof j?.error === "string" ? j.error : "Search failed");
+          setSearchRemote({
+            query: raw,
+            parents: Array.isArray(j?.parents) ? j!.parents! : [],
+            children: Array.isArray(j?.children) ? j!.children! : [],
+          });
+        } catch (e) {
+          if (seq !== searchReqSeq.current) return;
+          setSearchRemote(null);
+          setSearchErr(e instanceof Error ? e.message : "Search failed");
+        } finally {
+          if (seq === searchReqSeq.current) setSearchLoading(false);
+        }
+      })();
+    }, 380);
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
 
   const displayDate = React.useMemo(() => {
     const [yStr, mStr, dStr] = selectedDate.split("-");
@@ -129,20 +180,40 @@ export function MeetingsNotes() {
     [children, selectedDate],
   );
 
+  const rawSearch = searchQuery.trim();
+  const remoteChildren =
+    rawSearch.length >= 2 && searchRemote?.query === rawSearch ? searchRemote.children : null;
+
   const childrenFiltered = React.useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return childrenOnDay;
+    if (rawSearch.length >= 2) {
+      if (remoteChildren !== null) return remoteChildren;
+      return [];
+    }
+    if (!rawSearch) return childrenOnDay;
+    const q = rawSearch.toLowerCase();
     return childrenOnDay.filter((c) => {
       const parent = parents.find((p) => p.id === c.parent_id);
       const title = (parent?.content ?? "").toLowerCase();
       return c.content.toLowerCase().includes(q) || title.includes(q);
     });
-  }, [childrenOnDay, parents, searchQuery]);
+  }, [childrenOnDay, parents, rawSearch, remoteChildren]);
 
   const filteredParents = React.useMemo(() => {
+    if (rawSearch.length >= 2 && searchRemote?.query === rawSearch) {
+      const latest = new Map<string, string>();
+      for (const c of searchRemote.children) {
+        const prev = latest.get(c.parent_id);
+        if (!prev || (c.created_at ?? "") > prev) latest.set(c.parent_id, c.created_at ?? "");
+      }
+      return [...searchRemote.parents].sort((a, b) => {
+        const ta = latest.get(a.id) ?? a.created_at;
+        const tb = latest.get(b.id) ?? b.created_at;
+        return tb.localeCompare(ta);
+      });
+    }
     const ids = new Set(childrenFiltered.map((c) => c.parent_id));
     return parents.filter((p) => ids.has(p.id));
-  }, [parents, childrenFiltered]);
+  }, [parents, childrenFiltered, rawSearch, searchRemote]);
 
   const latestChildIsoByParent = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -163,7 +234,7 @@ export function MeetingsNotes() {
     );
   }, [filteredParents]);
 
-  const selectedParent = parents.find((p) => p.id === selectedParentId) ?? null;
+  const selectedParent = filteredParents.find((p) => p.id === selectedParentId) ?? null;
   const sessions = React.useMemo(() => {
     if (!selectedParentId) return [];
     const list = childrenFiltered.filter((c) => c.parent_id === selectedParentId);
@@ -171,14 +242,15 @@ export function MeetingsNotes() {
   }, [childrenFiltered, selectedParentId]);
 
   const searchActive = searchQuery.trim().length > 0;
+  const remoteSearchActive = rawSearch.length >= 2;
 
   return (
     <div className="flex h-[calc(100dvh-6.75rem)] min-h-0 w-full flex-col overflow-hidden font-sans sm:h-[calc(100dvh-7.25rem)]">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
         <div className="text-sm font-semibold tracking-tight text-foreground">Meetings</div>
-        <div className="flex min-w-0 flex-1 basis-[8rem] items-center justify-center">
-          <div className="truncate text-center text-xs font-medium text-muted-foreground sm:text-sm">
-            {displayDate}
+        <div className="flex min-w-0 flex-1 basis-[8rem] flex-col items-center justify-center text-center">
+          <div className="truncate text-xs font-medium text-muted-foreground sm:text-sm">
+            {remoteSearchActive ? "Search · all recordings" : displayDate}
           </div>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -216,7 +288,7 @@ export function MeetingsNotes() {
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search this day’s conversations…"
+            placeholder="Search all conversations (2+ letters)…"
             className="h-9 text-[13px]"
             aria-label="Search meeting transcripts"
             onKeyDown={(e) => {
@@ -226,11 +298,16 @@ export function MeetingsNotes() {
               }
             }}
           />
+          {searchErr ? <div className="mt-1.5 text-[11px] text-red-700 dark:text-red-300">{searchErr}</div> : null}
+          {rawSearch.length === 1 ? (
+            <div className="mt-1.5 text-[11px] text-muted-foreground">Enter at least 2 characters to search history.</div>
+          ) : null}
         </div>
       ) : null}
 
       <div className="hidden border-b border-border/50 px-3 py-1.5 text-[11px] text-muted-foreground sm:block">
-        Transcripts save when you stop recording. Pick a day in the sidebar calendar to filter.
+        Transcripts save when you stop recording. Search looks through all saved transcripts. Pick a day in the sidebar to
+        browse by date.
       </div>
 
       {loading ? <div className="p-3 text-xs text-muted-foreground">Loading…</div> : null}
@@ -242,9 +319,13 @@ export function MeetingsNotes() {
             <div className="p-3 text-xs text-muted-foreground">
               {parents.length === 0
                 ? "No meetings yet."
-                : searchActive
-                  ? "No matches for this day."
-                  : "No recordings on this day."}
+                : remoteSearchActive && searchLoading
+                  ? "Searching…"
+                  : remoteSearchActive
+                    ? "No matches in your recordings."
+                    : searchActive
+                      ? "No matches for this day."
+                      : "No recordings on this day."}
             </div>
           ) : (
             <ul className="max-h-full overflow-y-auto p-2">
