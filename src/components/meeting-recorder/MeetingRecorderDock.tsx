@@ -23,6 +23,10 @@ function ymdLocal(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+function hhmmLocal(d = new Date()) {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 function bestCalendarTitle(events: ReturnType<typeof useEventStore.getState>["events"], now = new Date()): string | null {
   const today = ymdLocal(now);
   const curMin = now.getHours() * 60 + now.getMinutes();
@@ -137,14 +141,22 @@ export function MeetingRecorderDock() {
       setStartedAtMs(null);
 
       const started_at = session?.started_at ?? new Date().toISOString();
-      const ended_at = new Date().toISOString();
+      const endNow = new Date();
+      const ended_at = endNow.toISOString();
+      const meeting_end_local = { ymd: ymdLocal(endNow), hhmm: hhmmLocal(endNow) };
       const calendar_title = session?.calendar_title ?? null;
 
       const res = await fetch("/api/meetings/session/stop", {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ started_at, ended_at, transcript: finalText, calendar_title }),
+        body: JSON.stringify({
+          started_at,
+          ended_at,
+          transcript: finalText,
+          calendar_title,
+          meeting_end_local,
+        }),
       });
       const j = (await res.json().catch(() => null)) as {
         error?: string;

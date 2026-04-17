@@ -4,8 +4,11 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { assertOpenAIQuotaAvailable, recordOpenAITokenUsage } from "@/lib/billing/aiQuota";
 import { extractOpenAIUsageFromChatCompletion } from "@/lib/billing/openaiUsageFromResponse";
-import { parseTasks } from "@/modules/scratchpad/parser";
-import { defaultDueTimeQuarterHour } from "@/lib/datetime/quarterHour";
+import { parseTasks, type ParsedTask } from "@/modules/scratchpad/parser";
+import {
+  clampDueAfterMeetingEnd,
+  type MeetingEndLocal,
+} from "@/lib/datetime/meetingTaskDue";
 
 export const dynamic = "force-dynamic";
 
@@ -15,21 +18,35 @@ const BodySchema = z
     ended_at: z.string().datetime(),
     transcript: z.string().min(1).max(200_000),
     calendar_title: z.string().max(300).nullable().optional(),
+    meeting_end_local: z
+      .object({
+        ymd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        hhmm: z.string().regex(/^\d{2}:\d{2}$/),
+      })
+      .strict(),
   })
   .strict();
 
-function ymdLocalFromIso(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+const AI_TASK_DESCRIPTION_MAX = 2000;
+
+function normalizeAiDescription(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw
+    .replace(/\r\n/g, "\n")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+    .trim()
+    .slice(0, AI_TASK_DESCRIPTION_MAX);
 }
 
-function fallbackMeetingTitle(transcript: string): string {
-  const firstLine = transcript.split("\n").map((l) => l.trim()).find(Boolean) ?? "Meeting";
-  const words = firstLine.split(/\s+/).slice(0, 8).join(" ");
-  return (words || "Meeting").slice(0, 60);
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null;
+}
+
+function normalizeTaskType(v: unknown): ParsedTask["type"] {
+  const s = String(v ?? "todo");
+  if (s === "followup") return "followup";
+  if (s === "reminder") return "reminder";
+  return "todo";
 }
 
 async function summarizeMeetingTitleOpenAI(
@@ -73,24 +90,29 @@ async function summarizeMeetingTitleOpenAI(
 async function extractActionsOpenAI(
   apiKey: string,
   transcript: string,
-): Promise<{ tasks: ReturnType<typeof parseTasks>; tokens?: number } | null> {
+  meetingEndLocal: MeetingEndLocal,
+): Promise<{ tasks: ParsedTask[]; tokens?: number } | null> {
   const system = `You are Bacup Meeting Action Extractor.
 
 Goal: extract only clear action items from a meeting transcript.
 
 Rules:
 - Only output JSON.
-- Output an array of {title,type,due_date,due_time,assigned_to}.
-- title must be concise, imperative, professional.
+- Output an array of {title,description,type,due_date,due_time,assigned_to}.
+- title: short imperative heading. Professional; rephrase—do not paste raw transcript (keep necessary proper nouns).
+- description: 1–3 sentences on what to do—scope, outcome, useful context from the conversation. Do not repeat the title; no JSON inside strings.
 - type must be one of: todo, followup, reminder.
 - due_date must be YYYY-MM-DD or null.
 - due_time must be HH:MM (24h) or null.
-- assigned_to must be an empty string \"\" (unassigned) for every item (the user will assign later).
+- Deadlines: use null for both due_date and due_time unless the transcript states a specific time or calendar day. Never invent a clock time. If you set both, they must be strictly AFTER the meeting end local wall time given in the user message (same calendar semantics as the user's device).
+- assigned_to must be an empty string \"\" for every item (the user will assign later).
 - If an item is a decision, status update, or discussion, DO NOT include it.
 - If nothing is actionable, return [].
 `;
 
-  const user = `Transcript:\n${transcript.slice(0, 40_000)}`;
+  const user = `Meeting ended (user local wall clock): date=${meetingEndLocal.ymd} time=${meetingEndLocal.hhmm}
+
+Transcript:\n${transcript.slice(0, 40_000)}`;
 
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -105,7 +127,7 @@ Rules:
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      max_tokens: 700,
+      max_tokens: 1400,
     }),
   });
 
@@ -120,20 +142,20 @@ Rules:
   }
   if (!Array.isArray(parsed)) return null;
 
-  const normalized = parsed
-    .filter((x) => x && typeof x === "object")
+  const normalized: ParsedTask[] = parsed
+    .filter(isRecord)
     .map((x) => ({
-      title: String((x as any).title ?? "").trim().slice(0, 120),
-      description: "",
-      type: (String((x as any).type ?? "todo") as any) === "followup" ? "followup" : (String((x as any).type ?? "todo") as any) === "reminder" ? "reminder" : "todo",
+      title: String(x.title ?? "").trim().slice(0, 120),
+      description: normalizeAiDescription(x.description),
+      type: normalizeTaskType(x.type),
       assigned_to: "",
-      due_date: typeof (x as any).due_date === "string" ? String((x as any).due_date) : null,
-      due_time: typeof (x as any).due_time === "string" ? String((x as any).due_time) : null,
+      due_date: typeof x.due_date === "string" ? x.due_date : null,
+      due_time: typeof x.due_time === "string" ? x.due_time : null,
     }))
     .filter((t) => t.title.length > 0);
 
   const usage = extractOpenAIUsageFromChatCompletion(j);
-  return { tasks: normalized as any, tokens: usage?.totalTokens };
+  return { tasks: normalized, tokens: usage?.totalTokens };
 }
 
 export async function POST(req: Request) {
@@ -150,8 +172,8 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
   if (userErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { started_at, ended_at, transcript } = parsed.data;
-  const meetingYmd = ymdLocalFromIso(started_at);
+  const { started_at, transcript, meeting_end_local } = parsed.data;
+  const meetingYmd = meeting_end_local.ymd;
 
   const apiKey = process.env.OPENAI_API_KEY?.trim() || null;
 
@@ -197,7 +219,8 @@ export async function POST(req: Request) {
     parentId = String(ins?.id);
   }
 
-  const transcriptHeader = `Transcript (${meetingYmd}) — ${started_at.slice(11, 16)} to ${ended_at.slice(11, 16)}`.trim();
+  const transcriptHeader =
+    `Transcript (${meetingYmd}) — ${started_at.slice(11, 16)} to ${meeting_end_local.hhmm}`.trim();
   const transcriptBody = `${transcriptHeader}\n\n${transcript.trim()}`.slice(0, 200_000);
 
   const { data: child, error: childErr } = await supabase
@@ -214,42 +237,45 @@ export async function POST(req: Request) {
   if (childErr) return NextResponse.json({ error: childErr.message }, { status: 500 });
 
   // Extract actions (OpenAI first, fallback parser).
-  let extracted = [] as ReturnType<typeof parseTasks>;
+  let extracted: ParsedTask[] = [];
   let actionTokens = 0;
 
   if (apiKey) {
     const quota = await assertOpenAIQuotaAvailable(supabase, user.id, 2500);
     if (quota.ok) {
-      const resAi = await extractActionsOpenAI(apiKey, transcript);
+      const resAi = await extractActionsOpenAI(apiKey, transcript, meeting_end_local);
       if (resAi?.tasks) {
-        extracted = resAi.tasks as any;
+        extracted = resAi.tasks;
         actionTokens = resAi.tokens ?? 0;
       }
     }
   }
 
   if (extracted.length === 0) {
-    extracted = parseTasks(transcript).map((t) => ({ ...t, assigned_to: "" })) as any;
+    extracted = parseTasks(transcript).map((t) => ({ ...t, assigned_to: "" }));
   }
 
-  const tasksToInsert = extracted.slice(0, 50).map((t) => ({
-    user_id: user.id,
-    title: t.title,
-    description: t.description || null,
-    due_date: t.due_date ?? meetingYmd,
-    due_time: t.due_time ?? defaultDueTimeQuarterHour(),
-    type: t.type,
-    assigned_to: "",
-    status: "pending",
-    completed_at: null,
-    source: "scratchpad",
-  }));
+  const tasksToInsert = extracted.slice(0, 50).map((t) => {
+    const { due_date, due_time } = clampDueAfterMeetingEnd(t.due_date, t.due_time, meeting_end_local);
+    return {
+      user_id: user.id,
+      title: t.title,
+      description: t.description?.trim() ? t.description.trim() : null,
+      due_date,
+      due_time,
+      type: t.type,
+      assigned_to: "",
+      status: "pending",
+      completed_at: null,
+      source: "scratchpad",
+    };
+  });
 
-  let savedTasks: any[] = [];
+  let savedTasks: Record<string, unknown>[] = [];
   if (tasksToInsert.length > 0) {
     const { data: tasks, error: taskErr } = await supabase.from("tasks").insert(tasksToInsert).select("*");
     if (taskErr) return NextResponse.json({ error: taskErr.message }, { status: 500 });
-    savedTasks = tasks ?? [];
+    savedTasks = (tasks ?? []) as Record<string, unknown>[];
   }
 
   const totalTokens = titleTokens + actionTokens;
