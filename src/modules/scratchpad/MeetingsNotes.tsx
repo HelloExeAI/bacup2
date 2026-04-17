@@ -388,7 +388,7 @@ function SessionTranscript({ session, highlight }: { session: ChildRow; highligh
     return (
       <div className="rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm">
         <div className="text-[10px] text-muted-foreground">{new Date(session.created_at).toLocaleString()}</div>
-        <div className="mt-2 whitespace-pre-wrap text-sm font-sans leading-relaxed tracking-normal text-foreground antialiased">
+        <div className="mt-2 whitespace-pre-wrap text-justify text-sm font-sans leading-relaxed tracking-normal text-foreground antialiased">
           {session.content}
         </div>
       </div>
@@ -402,7 +402,7 @@ function SessionTranscript({ session, highlight }: { session: ChildRow; highligh
     return (
       <div className="rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm">
         <div className="text-[10px] text-muted-foreground">{new Date(session.created_at).toLocaleString()}</div>
-        <div className="mt-2 whitespace-pre-wrap text-sm font-sans leading-relaxed tracking-normal text-foreground antialiased">
+        <div className="mt-2 whitespace-pre-wrap text-justify text-sm font-sans leading-relaxed tracking-normal text-foreground antialiased">
           {text}
         </div>
       </div>
@@ -416,7 +416,7 @@ function SessionTranscript({ session, highlight }: { session: ChildRow; highligh
   return (
     <div className="rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm">
       <div className="text-[10px] text-muted-foreground">{new Date(session.created_at).toLocaleString()}</div>
-      <div className="mt-2 whitespace-pre-wrap text-sm font-sans leading-relaxed tracking-normal text-foreground antialiased">
+      <div className="mt-2 whitespace-pre-wrap text-justify text-sm font-sans leading-relaxed tracking-normal text-foreground antialiased">
         {before}
         <mark className="rounded-sm bg-amber-200/90 px-0.5 text-foreground dark:bg-amber-500/35">{match}</mark>
         {after}
