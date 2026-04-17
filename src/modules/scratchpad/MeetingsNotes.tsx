@@ -305,11 +305,6 @@ export function MeetingsNotes() {
         </div>
       ) : null}
 
-      <div className="hidden border-b border-border/50 px-3 py-1.5 text-[11px] text-muted-foreground sm:block">
-        Transcripts save when you stop recording. Search looks through all saved transcripts. Pick a day in the sidebar to
-        browse by date.
-      </div>
-
       {loading ? <div className="p-3 text-xs text-muted-foreground">Loading…</div> : null}
       {err ? <div className="p-3 text-xs text-red-800 dark:text-red-200">{err}</div> : null}
 

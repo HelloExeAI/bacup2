@@ -281,15 +281,15 @@ export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
           <button
             type="button"
             aria-label="Close Today Focus"
             className="absolute inset-0 bg-black/30"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-1/2 top-8 z-10 w-[min(760px,calc(100vw-24px))] -translate-x-1/2 rounded-xl bg-background shadow-[0_1px_0_rgba(70,54,39,0.05),0_12px_40px_rgba(61,45,33,0.14)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.55)]">
-            <div className="flex items-center justify-between px-4 py-3">
+          <div className="relative z-10 flex max-h-[min(88vh,900px)] w-full max-w-[760px] flex-col overflow-hidden rounded-xl bg-background shadow-[0_1px_0_rgba(70,54,39,0.05),0_12px_40px_rgba(61,45,33,0.14)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.55)]">
+            <div className="flex shrink-0 items-center justify-between px-4 py-3">
               <div className="text-sm font-semibold">Today&apos;s Focus</div>
               <button
                 type="button"
@@ -300,7 +300,7 @@ export function TodayFocus({ onOpenTasks }: TodayFocusProps) {
               </button>
             </div>
 
-            <div className="max-h-[78vh] space-y-3 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
               <section className={focusExpandedCardClass}>
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI Summary</div>
                 <div className="mt-1 text-base text-foreground">

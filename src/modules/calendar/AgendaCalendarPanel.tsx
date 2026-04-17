@@ -10,6 +10,8 @@ import { TaskQuickDetailModal } from "@/modules/tasks/TaskQuickDetailModal";
 import { defaultDueTimeQuarterHour } from "@/lib/datetime/quarterHour";
 import { TaskDescriptionAiField } from "@/modules/tasks/TaskDescriptionAiField";
 import { fetchTodayTimelineCached, peekTodayTimelineCache } from "@/lib/timeline/todayClientCache";
+import type { TodayTimelineConnected } from "@/lib/timeline/todayClientCache";
+import { TimelineCreateEventModal } from "@/modules/calendar/TimelineCreateEventModal";
 
 const timelineEventCardClass =
   "rounded-lg bg-muted p-2 shadow-[0_1px_0_rgba(70,54,39,0.04),0_10px_24px_rgba(61,45,33,0.1)] dark:shadow-[0_10px_28px_rgba(0,0,0,0.38)]";
@@ -503,6 +505,10 @@ export function AgendaCalendarPanel() {
   const [loading, setLoading] = React.useState(!initialPeek.fresh);
   const [error, setError] = React.useState<string | null>(null);
   const [items, setItems] = React.useState<TimelineItem[]>(initialPeek.data?.items ?? []);
+  const [connected, setConnected] = React.useState<TodayTimelineConnected>(
+    () => initialPeek.data?.connected ?? { google: false, outlook: false, imap: false },
+  );
+  const [createEventOpen, setCreateEventOpen] = React.useState(false);
 
   const [modalItem, setModalItem] = React.useState<TimelineItem | null>(null);
   /** When set, we show the task popup for the created/selected local task. */
@@ -516,6 +522,7 @@ export function AgendaCalendarPanel() {
     const peek = force ? { fresh: false, data: null } : peekTodayTimelineCache();
     if (!force && peek.fresh && peek.data) {
       setItems(peek.data.items);
+      setConnected(peek.data.connected);
       setLoading(false);
       setError(null);
       return;
@@ -526,6 +533,7 @@ export function AgendaCalendarPanel() {
     try {
       const { data } = await fetchTodayTimelineCached({ force });
       setItems(data.items ?? []);
+      setConnected(data.connected);
     } catch {
       setError("Could not load timeline.");
       setItems([]);
@@ -700,8 +708,17 @@ export function AgendaCalendarPanel() {
 
   return (
     <section className="flex max-h-[min(58vh,520px)] min-h-0 flex-col overflow-hidden rounded-xl bacup-surface p-3">
-      <div className="shrink-0">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <div className="text-xs font-semibold tracking-wide text-foreground">Timeline</div>
+        <button
+          type="button"
+          onClick={() => setCreateEventOpen(true)}
+          className={ICON_BTN}
+          title="Add calendar event"
+          aria-label="Add calendar event"
+        >
+          <span className="text-lg font-light leading-none">+</span>
+        </button>
       </div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
@@ -834,6 +851,14 @@ export function AgendaCalendarPanel() {
           onClose={closeModal}
         />
       ) : null}
+
+      <TimelineCreateEventModal
+        open={createEventOpen}
+        onClose={() => setCreateEventOpen(false)}
+        onCreated={() => void load({ force: true })}
+        connectedGoogle={connected.google}
+        connectedOutlook={connected.outlook}
+      />
     </section>
   );
 }
