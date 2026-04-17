@@ -1,4 +1,4 @@
-type DeepgramEvent =
+export type DeepgramStreamEvent =
   | { kind: "interim"; text: string; combined: string }
   | { kind: "final"; text: string; combined: string }
   | { kind: "error"; message: string }
@@ -6,9 +6,17 @@ type DeepgramEvent =
 
 export type DeepgramSource = "mic" | "tab";
 
-/** Nova streaming with diarization (Person 1 / Person 2 labels from `words[].speaker`). */
-const DG_URL =
-  "wss://api.deepgram.com/v1/listen?model=nova-3&punctuate=true&smart_format=true&interim_results=true&diarize=true";
+function buildDeepgramListenUrl(language: string): string {
+  const params = new URLSearchParams({
+    model: "nova-3",
+    punctuate: "true",
+    smart_format: "true",
+    interim_results: "true",
+    diarize: "true",
+    language: language.trim() || "multi",
+  });
+  return `wss://api.deepgram.com/v1/listen?${params.toString()}`;
+}
 
 function normalizeChunk(s: string) {
   return s.trim().replace(/\s+/g, " ");
@@ -42,7 +50,7 @@ function formatDiarizedWords(words: WordPiece[]): string {
 }
 
 /** If the newest block continues the same person as the last line of `prev`, merge into that line. */
-function mergeLabeledBlocks(prev: string, block: string): string {
+export function mergeLabeledBlocks(prev: string, block: string): string {
   const p = prev.trim();
   const b = block.trim();
   if (!p) return b;
@@ -71,7 +79,7 @@ function mergeLabeledBlocks(prev: string, block: string): string {
   return `${p}\n${b}`;
 }
 
-function combinedDisplay(transcript: string, live: string): string {
+export function combinedDisplay(transcript: string, live: string): string {
   const t = transcript.trim();
   const l = live.trim();
   if (!t) return l;
@@ -81,13 +89,19 @@ function combinedDisplay(transcript: string, live: string): string {
 
 export async function startDeepgramStream(opts: {
   source: DeepgramSource;
-  onEvent: (e: DeepgramEvent) => void;
+  onEvent: (e: DeepgramStreamEvent) => void;
   /** If provided, use as Deepgram bearer/token. Otherwise fetch from /api/deepgram/token. */
   deepgramToken?: string;
+  /**
+   * Deepgram `language` param. Use `multi` so supported languages are auto-detected.
+   * @see https://developers.deepgram.com/docs/language
+   */
+  language?: string;
 }): Promise<{
   stop: () => Promise<string>;
 }> {
   const { source, onEvent } = opts;
+  const wsUrl = buildDeepgramListenUrl(opts.language ?? "multi");
   onEvent({ kind: "error", message: "" }); // allow caller to clear error by handling empty
 
   const getToken = async (): Promise<string> => {
@@ -112,7 +126,7 @@ export async function startDeepgramStream(opts: {
   let closedByClient = false;
   let keepAliveId: number | null = null;
 
-  const ws = new WebSocket(DG_URL, [protocol, token]);
+  const ws = new WebSocket(wsUrl, [protocol, token]);
 
   let recorder: MediaRecorder | null = null;
   let live = "";

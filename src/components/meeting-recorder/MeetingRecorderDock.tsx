@@ -4,7 +4,13 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { startDeepgramStream, type DeepgramSource } from "@/lib/voice/deepgramStream";
+import {
+  combinedDisplay,
+  mergeLabeledBlocks,
+  startDeepgramStream,
+  type DeepgramSource,
+  type DeepgramStreamEvent,
+} from "@/lib/voice/deepgramStream";
 import { useMeetingRecorderStore } from "@/store/meetingRecorderStore";
 import { useEventStore } from "@/store/eventStore";
 import { useTaskStore, type Task } from "@/store/taskStore";
@@ -62,8 +68,39 @@ export function MeetingRecorderDock() {
   const [startedAtMs, setStartedAtMs] = React.useState<number | null>(null);
   const [tick, setTick] = React.useState(0);
   const [stopping, setStopping] = React.useState(false);
+  /** When on, Deepgram uses multilingual auto-detect; transcript is translated to English for display + save. */
+  const [englishTranscript, setEnglishTranscript] = React.useState(true);
 
   const streamStopRef = React.useRef<null | (() => Promise<string>)>(null);
+  const englishMergedRef = React.useRef("");
+  const sessionGenRef = React.useRef(0);
+  const translateTailRef = React.useRef(Promise.resolve());
+  const interimTimerRef = React.useRef<number | null>(null);
+  const latestInterimRef = React.useRef<{ text: string; combined: string }>({ text: "", combined: "" });
+
+  const flushInterimDebounce = React.useCallback(() => {
+    if (interimTimerRef.current != null) {
+      window.clearTimeout(interimTimerRef.current);
+      interimTimerRef.current = null;
+    }
+  }, []);
+
+  const translateMeetingText = React.useCallback(async (text: string): Promise<string> => {
+    const res = await fetch("/api/meetings/transcript-translate", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    const j = (await res.json().catch(() => null)) as { english?: string; error?: string } | null;
+    if (!res.ok) throw new Error(typeof j?.error === "string" ? j.error : "Translation failed");
+    const out = String(j?.english ?? "").trim();
+    return out || text;
+  }, []);
+
+  const enqueueTranslate = React.useCallback((fn: () => Promise<void>) => {
+    translateTailRef.current = translateTailRef.current.then(fn).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     if (!listening) return;
@@ -76,12 +113,17 @@ export function MeetingRecorderDock() {
   const start = async () => {
     setError(null);
     const cal = bestCalendarTitle(events);
+    sessionGenRef.current += 1;
+    const gen = sessionGenRef.current;
+    englishMergedRef.current = "";
+    translateTailRef.current = Promise.resolve();
+    flushInterimDebounce();
     startSession(cal);
     setStartedAtMs(Date.now());
     setListening(true);
 
     try {
-      const onEvent = (e: any) => {
+      const onEvent = (e: DeepgramStreamEvent) => {
         if (e.kind === "error") {
           const msg = e.message?.trim();
           if (!msg) return;
@@ -92,11 +134,54 @@ export function MeetingRecorderDock() {
           setListening(e.listening);
           return;
         }
-        setLiveCombined(e.combined);
-        setTranscript(e.combined);
+
+        if (!englishTranscript) {
+          setLiveCombined(e.combined);
+          setTranscript(e.combined);
+          return;
+        }
+
+        if (e.kind === "final") {
+          flushInterimDebounce();
+          enqueueTranslate(async () => {
+            try {
+              const enSeg = await translateMeetingText(e.text);
+              if (gen !== sessionGenRef.current) return;
+              englishMergedRef.current = mergeLabeledBlocks(englishMergedRef.current, enSeg);
+              setLiveCombined(englishMergedRef.current);
+              setTranscript(englishMergedRef.current);
+            } catch {
+              if (gen !== sessionGenRef.current) return;
+              englishMergedRef.current = mergeLabeledBlocks(englishMergedRef.current, e.text);
+              setLiveCombined(englishMergedRef.current);
+              setTranscript(englishMergedRef.current);
+            }
+          });
+          return;
+        }
+
+        latestInterimRef.current = { text: e.text, combined: e.combined };
+        flushInterimDebounce();
+        interimTimerRef.current = window.setTimeout(() => {
+          const { text: seg, combined: natCombined } = latestInterimRef.current;
+          void (async () => {
+            try {
+              const enSeg = await translateMeetingText(seg);
+              if (gen !== sessionGenRef.current) return;
+              const display = combinedDisplay(englishMergedRef.current, enSeg);
+              setLiveCombined(display);
+              setTranscript(display);
+            } catch {
+              if (gen !== sessionGenRef.current) return;
+              setLiveCombined(natCombined);
+              setTranscript(natCombined);
+            }
+          })();
+        }, 420);
       };
 
-      const tryStart = async (s: DeepgramSource) => startDeepgramStream({ source: s, onEvent });
+      const tryStart = async (s: DeepgramSource) =>
+        startDeepgramStream({ source: s, onEvent, language: "multi" });
 
       let handle:
         | {
@@ -130,11 +215,21 @@ export function MeetingRecorderDock() {
     setStopping(true);
     setError(null);
     try {
+      flushInterimDebounce();
       const stopFn = streamStopRef.current;
       streamStopRef.current = null;
-      const finalText = stopFn ? await stopFn() : session?.transcript ?? liveCombined;
+      const nativeFinal = stopFn ? (await stopFn()).trim() : (session?.transcript ?? liveCombined).trim();
       setListening(false);
       setStartedAtMs(null);
+
+      let transcriptForSave = nativeFinal;
+      if (englishTranscript && nativeFinal) {
+        try {
+          transcriptForSave = await translateMeetingText(nativeFinal);
+        } catch {
+          transcriptForSave = englishMergedRef.current.trim() || nativeFinal;
+        }
+      }
 
       const started_at = session?.started_at ?? new Date().toISOString();
       const ended_at = new Date().toISOString();
@@ -144,7 +239,7 @@ export function MeetingRecorderDock() {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ started_at, ended_at, transcript: finalText, calendar_title }),
+        body: JSON.stringify({ started_at, ended_at, transcript: transcriptForSave, calendar_title }),
       });
       const j = (await res.json().catch(() => null)) as {
         error?: string;
@@ -238,6 +333,16 @@ export function MeetingRecorderDock() {
               <option value="mic">Mic only</option>
               <option value="tab">Browser tab only</option>
             </select>
+            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                className="rounded border-border"
+                checked={englishTranscript}
+                onChange={(ev) => setEnglishTranscript(ev.target.checked)}
+                disabled={listening}
+              />
+              English transcript
+            </label>
             <div className="flex-1" />
             {!listening ? (
               <Button type="button" onClick={() => void start()}>
@@ -254,6 +359,11 @@ export function MeetingRecorderDock() {
             <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-3">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Live transcript
+                {englishTranscript ? (
+                  <span className="ml-2 font-normal normal-case tracking-normal text-muted-foreground/80">
+                    (multilingual speech → English)
+                  </span>
+                ) : null}
               </div>
               <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto whitespace-pre-wrap text-sm font-sans leading-relaxed text-foreground antialiased">
                 {liveCombined || "…"}
