@@ -6,11 +6,77 @@ type DeepgramEvent =
 
 export type DeepgramSource = "mic" | "tab";
 
+/** Nova streaming with diarization (Person 1 / Person 2 labels from `words[].speaker`). */
 const DG_URL =
-  "wss://api.deepgram.com/v1/listen?model=nova-3&punctuate=true&smart_format=true&interim_results=true";
+  "wss://api.deepgram.com/v1/listen?model=nova-3&punctuate=true&smart_format=true&interim_results=true&diarize=true";
 
 function normalizeChunk(s: string) {
   return s.trim().replace(/\s+/g, " ");
+}
+
+function personLabel(speaker: number): string {
+  const n = Number.isFinite(speaker) && speaker >= 0 ? speaker : 0;
+  return `Person ${n + 1}`;
+}
+
+type WordPiece = { word?: string; speaker?: number };
+
+/** Group consecutive words by speaker → "Person 1: …" lines. */
+function formatDiarizedWords(words: WordPiece[]): string {
+  if (!words.length) return "";
+  const parts: { sp: number; chunks: string[] }[] = [];
+  for (const w of words) {
+    const raw = String(w.word ?? "").trim();
+    if (!raw) continue;
+    const sp = typeof w.speaker === "number" && Number.isFinite(w.speaker) ? w.speaker : 0;
+    const last = parts[parts.length - 1];
+    if (last && last.sp === sp) {
+      last.chunks.push(raw);
+    } else {
+      parts.push({ sp, chunks: [raw] });
+    }
+  }
+  return parts
+    .map((p) => `${personLabel(p.sp)}: ${normalizeChunk(p.chunks.join(" "))}`)
+    .join("\n");
+}
+
+/** If the newest block continues the same person as the last line of `prev`, merge into that line. */
+function mergeLabeledBlocks(prev: string, block: string): string {
+  const p = prev.trim();
+  const b = block.trim();
+  if (!p) return b;
+  if (!b) return p;
+
+  const prevLines = p.split("\n");
+  const lastIdx = prevLines.length - 1;
+  const lastLine = prevLines[lastIdx]!;
+  const blockLines = b.split("\n");
+  const firstNew = blockLines[0]!;
+  const restNew = blockLines.slice(1).join("\n");
+
+  const parsePerson = (line: string) => {
+    const m = line.match(/^Person (\d+):\s*([\s\S]*)$/);
+    return m ? { num: m[1], body: m[2] ?? "" } : null;
+  };
+
+  const a = parsePerson(lastLine);
+  const c = parsePerson(firstNew);
+  if (a && c && a.num === c.num) {
+    const mergedBody = normalizeChunk(`${a.body} ${c.body}`);
+    prevLines[lastIdx] = `Person ${a.num}: ${mergedBody}`;
+    const head = prevLines.join("\n");
+    return restNew.trim() ? `${head}\n${restNew}` : head;
+  }
+  return `${p}\n${b}`;
+}
+
+function combinedDisplay(transcript: string, live: string): string {
+  const t = transcript.trim();
+  const l = live.trim();
+  if (!t) return l;
+  if (!l) return t;
+  return mergeLabeledBlocks(t, l);
 }
 
 export async function startDeepgramStream(opts: {
@@ -51,10 +117,9 @@ export async function startDeepgramStream(opts: {
   let recorder: MediaRecorder | null = null;
   let live = "";
   let transcript = "";
-  let lastFinalChunk = "";
+  /** Dedup near-identical finals (Deepgram occasionally repeats). */
+  let lastFinalFingerprint = "";
   const startedAt = Date.now();
-
-  const combinedText = () => normalizeChunk(`${transcript}${live ? (transcript ? " " : "") + live : ""}`);
 
   const stop = async () => {
     closedByClient = true;
@@ -101,7 +166,7 @@ export async function startDeepgramStream(opts: {
       }).catch(() => {});
     }
 
-    return combinedText();
+    return combinedDisplay(transcript, live).trim();
   };
 
   ws.onerror = () => {
@@ -148,24 +213,28 @@ export async function startDeepgramStream(opts: {
   ws.onmessage = (evt) => {
     try {
       const msg = JSON.parse(String(evt.data));
-      const text = msg?.channel?.alternatives?.[0]?.transcript ?? "";
-      if (!text) return;
+      const alt = msg?.channel?.alternatives?.[0];
+      if (!alt) return;
+
+      const text = String(alt.transcript ?? "").trim();
+      const words = Array.isArray(alt.words) ? (alt.words as WordPiece[]) : [];
+      let labeled = words.length > 0 ? formatDiarizedWords(words) : "";
+      if (!labeled && text) labeled = `${personLabel(0)}: ${normalizeChunk(text)}`;
+
+      if (!labeled) return;
+
       const isFinal = Boolean(msg?.is_final);
       if (isFinal) {
-        const c = normalizeChunk(text);
-        if (!c) return;
-        if (normalizeChunk(lastFinalChunk) === c) return;
-        lastFinalChunk = c;
-        const normCurrent = normalizeChunk(transcript);
-        if (normCurrent && normCurrent.endsWith(c)) return;
-        transcript = transcript ? `${transcript} ${c}` : c;
+        const fp = words.length ? JSON.stringify(words.map((w) => [w.word, w.speaker])) : labeled;
+        if (fp === lastFinalFingerprint) return;
+        lastFinalFingerprint = fp;
+
+        transcript = mergeLabeledBlocks(transcript, labeled);
         live = "";
-        onEvent({ kind: "final", text: c, combined: combinedText() });
+        onEvent({ kind: "final", text: labeled, combined: transcript.trim() });
       } else {
-        const interim = normalizeChunk(text);
-        if (!interim) return;
-        live = interim;
-        onEvent({ kind: "interim", text: interim, combined: combinedText() });
+        live = labeled;
+        onEvent({ kind: "interim", text: labeled, combined: combinedDisplay(transcript, live) });
       }
     } catch {
       /* ignore */
@@ -174,4 +243,3 @@ export async function startDeepgramStream(opts: {
 
   return { stop };
 }
-
