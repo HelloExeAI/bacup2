@@ -27,6 +27,19 @@ function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 }
 
+function formatInvalidBodyDetails(details: unknown): string {
+  if (!details || typeof details !== "object") return "";
+  const d = details as { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+  const bits: string[] = [];
+  for (const e of d.formErrors ?? []) {
+    if (e) bits.push(e);
+  }
+  for (const [field, errs] of Object.entries(d.fieldErrors ?? {})) {
+    if (Array.isArray(errs) && errs.length) bits.push(`${field}: ${errs.join(", ")}`);
+  }
+  return bits.length ? bits.join(" · ") : "";
+}
+
 function formatTaskMeta(t: Task): string {
   const assignee = (t.assigned_to ?? "").trim();
   const assigneeBit =
@@ -168,6 +181,9 @@ export function AutomateFollowups() {
     try {
       const selectedList = followupTasks.filter((t) => selectedIds.has(t.id));
       if (selectedList.length === 0) throw new Error("Select at least one task.");
+      if (selectedList.some((t) => t.id.startsWith("temp_"))) {
+        throw new Error("Some selected tasks are still saving. Wait a moment and try again.");
+      }
       if (!message.trim()) throw new Error("Write a short update message.");
 
       if (channel !== "email") {
@@ -201,14 +217,19 @@ export function AutomateFollowups() {
       const j = (await res.json().catch(() => null)) as {
         ok?: boolean;
         error?: string;
-        details?: string;
+        details?: string | Record<string, unknown>;
         results?: Array<{ to: string; ok: boolean; error?: string }>;
         updated_tasks?: Task[];
       } | null;
 
       if (!res.ok) {
         const base = typeof j?.error === "string" ? j.error : "Could not send followup.";
-        const det = typeof j?.details === "string" ? j.details : "";
+        const det =
+          typeof j?.details === "string"
+            ? j.details
+            : j?.error === "Invalid body"
+              ? formatInvalidBodyDetails(j.details)
+              : "";
         throw new Error(det ? `${base}: ${det}` : base);
       }
 

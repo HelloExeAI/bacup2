@@ -17,7 +17,8 @@ const BodySchema = z
     channel: z.enum(["email", "whatsapp", "slack"]),
     from_connected_account_id: z.string().uuid().optional(),
     message: z.string().min(1).max(5000),
-    task_ids: z.array(z.string().uuid()).min(1),
+    /** DB ownership check is authoritative; allow non-UUID ids (e.g. optimistic temp_*) so we return invalid_tasks instead of 400 Invalid body. */
+    task_ids: z.array(z.string().min(1)).min(1),
     to_raw: z.string(),
     cc_raw: z.string().optional(),
   })
