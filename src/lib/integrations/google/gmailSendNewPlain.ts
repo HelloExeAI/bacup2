@@ -15,6 +15,8 @@ export async function sendGmailNewPlainMessage(params: {
   userId: string;
   accountId: string;
   to: string;
+  /** Comma-separated RFC 5322 Cc list (optional). */
+  cc?: string;
   subject: string;
   textPlain: string;
 }): Promise<
@@ -34,6 +36,7 @@ export async function sendGmailNewPlainMessage(params: {
 
     const mime = buildEmailMime({
       to,
+      ...(params.cc?.trim() ? { cc: params.cc.trim() } : {}),
       subject,
       textPlain,
       html: htmlFinal,

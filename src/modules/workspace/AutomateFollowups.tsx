@@ -3,7 +3,9 @@
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
+import { calendarYmdInTimeZone } from "@/lib/email/calendarYmd";
 import { useTaskStore, type Task } from "@/store/taskStore";
+import { useUserStore } from "@/store/userStore";
 
 type Channel = "email" | "whatsapp" | "slack";
 
@@ -41,6 +43,15 @@ function includeInAutomateFollowups(t: Task): boolean {
   return true;
 }
 
+/** From the next local calendar day after a successful send, hide from this hub list. */
+function hideFromAutomateHubAfterPriorSendDay(t: Task, timezone: string | null | undefined): boolean {
+  const s = t.automate_followup_sent_at;
+  if (!s) return false;
+  const sentYmd = calendarYmdInTimeZone(timezone, new Date(s));
+  const todayYmd = calendarYmdInTimeZone(timezone, new Date());
+  return sentYmd < todayYmd;
+}
+
 function assigneeSortKey(t: Task): string {
   const a = (t.assigned_to ?? "").trim();
   if (a === "") return "\uffff";
@@ -50,15 +61,20 @@ function assigneeSortKey(t: Task): string {
 export function AutomateFollowups() {
   const tasks = useTaskStore((s) => s.tasks);
   const addTasks = useTaskStore((s) => s.addTasks);
+  const profileTimezone = useUserStore((s) => s.profile?.timezone);
+
   const followupTasks = React.useMemo(() => {
-    const open = tasks.filter((t) => t.status === "pending").filter(includeInAutomateFollowups);
+    const open = tasks
+      .filter((t) => t.status === "pending")
+      .filter(includeInAutomateFollowups)
+      .filter((t) => !hideFromAutomateHubAfterPriorSendDay(t, profileTimezone));
     return [...open].sort((a, b) => {
       const ak = assigneeSortKey(a);
       const bk = assigneeSortKey(b);
       if (ak !== bk) return ak.localeCompare(bk);
       return a.title.localeCompare(b.title);
     });
-  }, [tasks]);
+  }, [tasks, profileTimezone]);
 
   const [open, setOpen] = React.useState(false);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
@@ -67,7 +83,8 @@ export function AutomateFollowups() {
   const [channel, setChannel] = React.useState<Channel>("email");
   const [googleAccounts, setGoogleAccounts] = React.useState<ConnectedAccount[]>([]);
   const [fromAccountId, setFromAccountId] = React.useState<string>("");
-  const [recipientByTaskId, setRecipientByTaskId] = React.useState<Record<string, string>>({});
+  const [toRaw, setToRaw] = React.useState("");
+  const [ccRaw, setCcRaw] = React.useState("");
   const [message, setMessage] = React.useState("");
 
   const [saving, setSaving] = React.useState(false);
@@ -136,9 +153,8 @@ export function AutomateFollowups() {
     setSelectedIds(initial);
     setChannel(defaultChannel);
     if (!fromAccountId && googleAccounts.length > 0) setFromAccountId(googleAccounts[0]!.id);
-    const blankRecipients: Record<string, string> = {};
-    for (const t of followupTasks) blankRecipients[t.id] = "";
-    setRecipientByTaskId(blankRecipients);
+    setToRaw("");
+    setCcRaw("");
     setMessage("");
     setErr(null);
     setNotice(null);
@@ -154,39 +170,32 @@ export function AutomateFollowups() {
       if (selectedList.length === 0) throw new Error("Select at least one task.");
       if (!message.trim()) throw new Error("Write a short update message.");
 
-      if (channel === "email") {
-        if (!fromAccountId) throw new Error("Pick a connected Email account (Google) to send from.");
-        for (const t of selectedList) {
-          const emails = parseRecipients(recipientByTaskId[t.id] ?? "").filter(isEmail);
-          if (emails.length === 0) {
-            throw new Error(`Add at least one email for: ${t.title}`);
-          }
-        }
-      } else {
-        for (const t of selectedList) {
-          if (!parseRecipients(recipientByTaskId[t.id] ?? "").length) {
-            throw new Error(`Add at least one recipient identifier for: ${t.title}`);
-          }
-        }
+      if (channel !== "email") {
+        throw new Error("Only Email is supported for automated follow-ups right now.");
+      }
+      if (!fromAccountId) throw new Error("Pick a connected Email account (Google) to send from.");
+      const toEmails = parseRecipients(toRaw).filter(isEmail);
+      if (toEmails.length !== 1) {
+        throw new Error("Enter exactly one email in To (the person who can use the update link).");
+      }
+      const ccTokens = parseRecipients(ccRaw);
+      for (const t of ccTokens) {
+        if (!isEmail(t)) throw new Error(`Cc has an invalid email: ${t.slice(0, 64)}`);
       }
 
-      const task_assignments = selectedList.map((t) => ({
-        task_id: t.id,
-        recipients_raw: recipientByTaskId[t.id] ?? "",
-      }));
-
-      const task_summaries = selectedList.map((t) => ({ id: t.id, title: t.title }));
+      const task_ids = selectedList.map((t) => t.id);
 
       const res = await fetch("/api/followups/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          channel,
-          ...(channel === "email" ? { from_connected_account_id: fromAccountId } : {}),
+          channel: "email",
+          from_connected_account_id: fromAccountId,
           message: message.trim(),
-          task_summaries,
-          task_assignments,
+          task_ids,
+          to_raw: toRaw.trim(),
+          cc_raw: ccRaw.trim(),
         }),
       });
       const j = (await res.json().catch(() => null)) as {
@@ -194,6 +203,7 @@ export function AutomateFollowups() {
         error?: string;
         details?: string;
         results?: Array<{ to: string; ok: boolean; error?: string }>;
+        updated_tasks?: Task[];
       } | null;
 
       if (!res.ok) {
@@ -204,7 +214,11 @@ export function AutomateFollowups() {
 
       const results = Array.isArray(j?.results) ? j.results : [];
       if (j?.ok) {
-        setNotice(`Sent ${results.filter((r) => r.ok).length} consolidated message(s).`);
+        setNotice(`Sent ${results.filter((r) => r.ok).length} message(s).`);
+        if (Array.isArray(j.updated_tasks) && j.updated_tasks.length > 0) {
+          addTasks(j.updated_tasks);
+        }
+        window.dispatchEvent(new CustomEvent("bacup:automate-followup-sent"));
         setOpen(false);
         return;
       }
@@ -224,8 +238,6 @@ export function AutomateFollowups() {
     }
   };
 
-  const selectedTasks = followupTasks.filter((t) => selectedIds.has(t.id));
-
   return (
     <div className="mt-4 rounded-xl border border-border/60 bg-background/60 px-4 py-3 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -234,8 +246,8 @@ export function AutomateFollowups() {
       </div>
 
       <p className="mt-1 text-xs text-muted-foreground">
-        Open tasks sorted by assignee (self-assigned items are hidden). Recipients are grouped automatically: one message
-        per person with every task they owe you an update on.
+        Open tasks sorted by assignee (self-assigned items are hidden). One email lists every selected task; set To and Cc
+        once. Tasks you already emailed stay here until the next calendar day, then move to history below.
       </p>
 
       {notice ? <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
@@ -322,8 +334,8 @@ export function AutomateFollowups() {
               <div>
                 <div className="text-sm font-semibold text-foreground">Follow up</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  Pick tasks, assign recipients per task — we consolidate so each person gets one message with all their
-                  items. Tone comes from your template in Settings → Communications.
+                  Choose tasks, one To address, optional Cc. One message lists every selected task. Tone comes from your
+                  template in Settings → Communications.
                 </div>
               </div>
               <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
@@ -332,138 +344,137 @@ export function AutomateFollowups() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
-            {err ? (
-              <div className="mb-3 rounded-md border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-xs text-red-800 dark:text-red-200">
-                {err}
-              </div>
-            ) : null}
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Communication channel
+              {err ? (
+                <div className="mb-3 rounded-md border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-xs text-red-800 dark:text-red-200">
+                  {err}
                 </div>
-                <select
-                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                  value={channel}
-                  onChange={(e) => setChannel(e.target.value as Channel)}
-                >
-                  <option value="email">Email</option>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="slack">Slack</option>
-                </select>
-                <div className="text-[11px] text-muted-foreground">
-                  Default from Settings: <span className="font-medium">{defaultChannel}</span>
-                </div>
-              </div>
+              ) : null}
 
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Your note</div>
-                <p className="text-[11px] text-muted-foreground">
-                  This becomes <span className="font-mono text-[10px]">{"{{user_message}}"}</span> inside your email
-                  template.
-                </p>
-              </div>
-            </div>
-
-            {channel === "email" ? (
-              <div className="mt-3 space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Send from</div>
-                <select
-                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                  value={fromAccountId}
-                  onChange={(e) => setFromAccountId(e.target.value)}
-                  disabled={saving}
-                >
-                  <option value="" disabled>
-                    {googleAccounts.length ? "Select account…" : "No Google account connected"}
-                  </option>
-                  {googleAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {(a.display_name && a.display_name.trim()) || a.account_email}
-                    </option>
-                  ))}
-                </select>
-                {!googleAccounts.length ? (
-                  <div className="text-[11px] text-muted-foreground">
-                    Connect a Google account in <span className="font-medium">Settings → Integrations</span>.
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Communication channel
                   </div>
-                ) : null}
-              </div>
-            ) : null}
+                  <select
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    value={channel}
+                    onChange={(e) => setChannel(e.target.value as Channel)}
+                  >
+                    <option value="email">Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="slack">Slack</option>
+                  </select>
+                  <div className="text-[11px] text-muted-foreground">
+                    Default from Settings: <span className="font-medium">{defaultChannel}</span>
+                  </div>
+                </div>
 
-            <div className="mt-3 space-y-1.5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Message</div>
-              <textarea
-                className="min-h-[88px] w-full resize-y rounded-md border border-border bg-background px-2 py-2 text-sm"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Ask for an update, add context, and propose next step…"
-              />
-            </div>
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Your note</div>
+                  <p className="text-[11px] text-muted-foreground">
+                    This becomes <span className="font-mono text-[10px]">{"{{user_message}}"}</span> inside your email
+                    template.
+                  </p>
+                </div>
+              </div>
 
-            <div className="mt-3 space-y-1.5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Pending tasks to follow up on
-              </div>
-              <div className="max-h-40 overflow-y-auto rounded-md border border-border/60 bg-muted/10 p-2">
-                {followupTasks.map((t) => {
-                  const checked = selectedIds.has(t.id);
-                  return (
-                    <label key={t.id} className="flex cursor-pointer items-start gap-2 py-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          setSelectedIds((prev) => {
-                            const next = new Set(prev);
-                            if (e.target.checked) next.add(t.id);
-                            else next.delete(t.id);
-                            return next;
-                          });
-                          if (e.target.checked) {
-                            setRecipientByTaskId((prev) => ({ ...prev, [t.id]: prev[t.id] ?? "" }));
-                          }
-                        }}
-                      />
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium text-foreground">{t.title}</span>
-                        <span className="block truncate text-[10px] text-muted-foreground">{formatTaskMeta(t)}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-3 space-y-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Recipients per selected task
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {channel === "email"
-                  ? "One or more emails per task (comma-separated). The same person on multiple tasks gets a single consolidated email."
-                  : "WhatsApp and Slack sending is coming next — identifiers are collected for when those channels ship."}
-              </p>
-              <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-border/60 bg-muted/10 p-2">
-                {selectedTasks.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">Select at least one task above.</div>
-                ) : (
-                  selectedTasks.map((t) => (
-                    <div key={t.id} className="space-y-1 rounded-md border border-border/50 bg-background/70 px-2 py-2">
-                      <div className="truncate text-xs font-medium text-foreground">{t.title}</div>
-                      <input
-                        className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs"
-                        value={recipientByTaskId[t.id] ?? ""}
-                        onChange={(e) => setRecipientByTaskId((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                        placeholder={channel === "email" ? "email@company.com, …" : "phone / channel id (soon)"}
-                        disabled={saving}
-                      />
+              {channel === "email" ? (
+                <div className="mt-3 space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Send from</div>
+                  <select
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    value={fromAccountId}
+                    onChange={(e) => setFromAccountId(e.target.value)}
+                    disabled={saving}
+                  >
+                    <option value="" disabled>
+                      {googleAccounts.length ? "Select account…" : "No Google account connected"}
+                    </option>
+                    {googleAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {(a.display_name && a.display_name.trim()) || a.account_email}
+                      </option>
+                    ))}
+                  </select>
+                  {!googleAccounts.length ? (
+                    <div className="text-[11px] text-muted-foreground">
+                      Connect a Google account in <span className="font-medium">Settings → Integrations</span>.
                     </div>
-                  ))
-                )}
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="mt-3 space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Message</div>
+                <textarea
+                  className="min-h-[88px] w-full resize-y rounded-md border border-border bg-background px-2 py-2 text-sm"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Ask for an update, add context, and propose next step…"
+                />
               </div>
-            </div>
+
+              <div className="mt-3 space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Pending tasks to follow up on
+                </div>
+                <div className="max-h-40 overflow-y-auto rounded-md border border-border/60 bg-muted/10 p-2">
+                  {followupTasks.map((t) => {
+                    const checked = selectedIds.has(t.id);
+                    return (
+                      <label key={t.id} className="flex cursor-pointer items-start gap-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(t.id);
+                              else next.delete(t.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-foreground">{t.title}</span>
+                          <span className="block truncate text-[10px] text-muted-foreground">{formatTaskMeta(t)}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {channel === "email" ? (
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">To</div>
+                    <input
+                      className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                      value={toRaw}
+                      onChange={(e) => setToRaw(e.target.value)}
+                      placeholder="assignee@company.com"
+                      disabled={saving}
+                      autoComplete="email"
+                    />
+                    <p className="text-[11px] text-muted-foreground">Exactly one email (gets the no-login update link).</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cc</div>
+                    <input
+                      className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                      value={ccRaw}
+                      onChange={(e) => setCcRaw(e.target.value)}
+                      placeholder="optional@company.com, …"
+                      disabled={saving}
+                      autoComplete="email"
+                    />
+                    <p className="text-[11px] text-muted-foreground">Optional; comma or newline separated.</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">Switch to Email to send from a connected Google account.</p>
+              )}
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-background px-4 py-3">

@@ -27,6 +27,8 @@ export type Task = {
   gmail_draft_id?: string | null;
   connected_account_id?: string | null;
   created_at: string;
+  /** Workspace hub bulk automate follow-up email sent successfully at this time. */
+  automate_followup_sent_at?: string | null;
   /** Populated for materialized recurring instances */
   series_id?: string | null;
   recurrence_label?: string | null;

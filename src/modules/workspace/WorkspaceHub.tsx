@@ -10,6 +10,7 @@ import { useTaskStore } from "@/store/taskStore";
 import { useEventStore } from "@/store/eventStore";
 import type { SettingsPayload, TeamMemberSummary } from "@/modules/settings/types";
 import { useSettingsModal } from "@/modules/settings/SettingsProvider";
+import { AutomatedFollowupHistory } from "@/modules/workspace/AutomatedFollowupHistory";
 import { AutomateFollowups } from "@/modules/workspace/AutomateFollowups";
 import { requestOverviewKpi, type OverviewKpiKind } from "@/modules/tasks/overviewKpiBus";
 import { buildTodayActionBriefLines, ymdToday } from "@/modules/tasks/dayBriefing";
@@ -607,6 +608,7 @@ export function WorkspaceHub() {
           </ul>
         </div>
         <AutomateFollowups />
+        <AutomatedFollowupHistory />
       </section>
 
       <section className="space-y-3" aria-labelledby="approvals-heading">
