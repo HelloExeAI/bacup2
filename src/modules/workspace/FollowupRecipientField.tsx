@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 
 import type { FollowupRecipientSuggestion } from "@/lib/followups/recipientSuggestionTypes";
 
@@ -58,39 +59,109 @@ type Props = {
 };
 
 export function FollowupRecipientField({ id, value, onChange, disabled, placeholder }: Props) {
-  const [open, setOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
-  const [items, setItems] = React.useState<FollowupRecipientSuggestion[]>([]);
-  const wrapRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
   const blurTimer = React.useRef<number | null>(null);
+
+  const [open, setOpen] = React.useState(false);
+  const [debouncing, setDebouncing] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [hasSearched, setHasSearched] = React.useState(false);
+  const [items, setItems] = React.useState<FollowupRecipientSuggestion[]>([]);
+  const [panelPos, setPanelPos] = React.useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
 
   const searchQ = recipientTypingToken(value);
 
+  const showPanel =
+    open &&
+    !disabled &&
+    (debouncing || loading || items.length > 0 || (hasSearched && !debouncing && !loading));
+
+  const updatePanelPos = React.useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const gap = 6;
+    const spaceBelow = window.innerHeight - r.bottom - gap - 8;
+    const maxHeight = Math.min(240, Math.max(120, spaceBelow));
+    setPanelPos({
+      top: r.bottom + gap,
+      left: r.left,
+      width: r.width,
+      maxHeight,
+    });
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!showPanel) {
+      setPanelPos(null);
+      return;
+    }
+    updatePanelPos();
+  }, [showPanel, updatePanelPos, value]);
+
   React.useEffect(() => {
-    if (!open || disabled) return;
+    if (!showPanel) return;
+    const onScrollOrResize = () => updatePanelPos();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [showPanel, updatePanelPos]);
+
+  React.useEffect(() => {
+    if (!open || disabled) {
+      setDebouncing(false);
+      setLoading(false);
+      setHasSearched(false);
+      setItems([]);
+      return;
+    }
+
+    let cancelled = false;
     const ac = new AbortController();
+
+    setDebouncing(true);
+    setHasSearched(false);
+
     const t = window.setTimeout(() => {
+      if (cancelled) return;
+      setDebouncing(false);
+      setLoading(true);
+      setItems([]);
       void (async () => {
-        setLoading(true);
         try {
           const res = await fetch(
             `/api/followups/recipient-suggestions?q=${encodeURIComponent(searchQ)}&limit=14`,
             { credentials: "include", signal: ac.signal },
           );
           const j = (await res.json().catch(() => null)) as { suggestions?: FollowupRecipientSuggestion[] } | null;
-          if (!ac.signal.aborted) {
-            setItems(Array.isArray(j?.suggestions) ? j.suggestions : []);
-          }
+          if (cancelled) return;
+          setItems(Array.isArray(j?.suggestions) ? j.suggestions : []);
         } catch {
-          if (!ac.signal.aborted) setItems([]);
+          if (!cancelled && !ac.signal.aborted) setItems([]);
         } finally {
-          if (!ac.signal.aborted) setLoading(false);
+          if (!cancelled) {
+            setLoading(false);
+            setHasSearched(true);
+          }
         }
       })();
     }, 180);
+
     return () => {
+      cancelled = true;
       ac.abort();
       window.clearTimeout(t);
+      setDebouncing(false);
+      setLoading(false);
     };
   }, [open, disabled, searchQ]);
 
@@ -105,24 +176,69 @@ export function FollowupRecipientField({ id, value, onChange, disabled, placehol
     clearBlurTimer();
     onChange(applyRecipientPick(value, row.email));
     setOpen(false);
+    setHasSearched(false);
+    setItems([]);
   };
 
   React.useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      const el = wrapRef.current;
-      if (!el || el.contains(e.target as Node)) return;
+      const node = e.target as Node;
+      if (inputRef.current?.contains(node) || panelRef.current?.contains(node)) return;
       setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const showList = open && (loading || items.length > 0);
+  const portal =
+    typeof document !== "undefined" &&
+    showPanel &&
+    panelPos &&
+    createPortal(
+      <div
+        ref={panelRef}
+        role="listbox"
+        className="fixed z-[200] overflow-auto rounded-lg border border-border bg-background py-1 text-left text-sm shadow-xl ring-1 ring-black/5 dark:ring-white/10"
+        style={{
+          top: panelPos.top,
+          left: panelPos.left,
+          width: panelPos.width,
+          maxHeight: panelPos.maxHeight,
+        }}
+        onMouseDown={(e) => e.preventDefault()}
+      >
+        {debouncing || (loading && items.length === 0) ? (
+          <div className="px-3 py-2.5 text-xs text-muted-foreground">Searching…</div>
+        ) : null}
+        {!debouncing && !loading && items.length === 0 && hasSearched ? (
+          <div className="px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            No saved suggestions yet. Add team members, assign tasks to emails, or send a follow-up once to build this
+            list.
+          </div>
+        ) : null}
+        {items.map((row) => (
+          <button
+            key={row.id}
+            type="button"
+            role="option"
+            className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-muted"
+            onClick={() => onPick(row)}
+          >
+            <span className="font-medium text-foreground">{row.label}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {row.email} · {row.subtitle}
+            </span>
+          </button>
+        ))}
+      </div>,
+      document.body,
+    );
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div className="relative">
       <input
+        ref={inputRef}
         id={id}
         type="text"
         className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
@@ -131,42 +247,28 @@ export function FollowupRecipientField({ id, value, onChange, disabled, placehol
         placeholder={placeholder}
         autoComplete="off"
         aria-autocomplete="list"
-        aria-expanded={showList}
+        aria-expanded={showPanel}
         onFocus={() => {
           clearBlurTimer();
           setOpen(true);
         }}
         onBlur={() => {
-          blurTimer.current = window.setTimeout(() => setOpen(false), 160);
+          blurTimer.current = window.setTimeout(() => {
+            setOpen(false);
+            setHasSearched(false);
+            setItems([]);
+          }, 200);
         }}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") {
+            setOpen(false);
+            setHasSearched(false);
+            setItems([]);
+          }
         }}
       />
-      {showList ? (
-        <div
-          className="absolute z-[80] mt-1 max-h-52 w-full overflow-auto rounded-md border border-border bg-popover py-1 text-left text-sm shadow-md"
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          {loading && items.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
-          ) : null}
-          {items.map((row) => (
-            <button
-              key={row.id}
-              type="button"
-              className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-muted/80"
-              onClick={() => onPick(row)}
-            >
-              <span className="font-medium text-foreground">{row.label}</span>
-              <span className="text-[11px] text-muted-foreground">
-                {row.email} · {row.subtitle}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {portal}
     </div>
   );
 }
