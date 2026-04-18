@@ -2,6 +2,12 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 import type { FollowupRecipientSuggestion } from "@/lib/followups/recipientSuggestionTypes";
+import {
+  GOOGLE_OTHER_CONTACTS_MIN_QUERY,
+  GooglePeopleSearchError,
+  searchGoogleOtherContacts,
+} from "@/lib/integrations/google/googleOtherContactsSearch";
+import { getValidGoogleAccessToken, GoogleIntegrationError } from "@/lib/integrations/google/googleAccessToken";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
@@ -62,8 +68,31 @@ export async function GET(req: Request) {
   const qRaw = sanitizeQuery(url.searchParams.get("q") ?? "");
   const q = qRaw.toLowerCase();
   const limit = Math.min(25, Math.max(1, Number(url.searchParams.get("limit")) || 14));
+  const preferredGoogleId = url.searchParams.get("google_account_id")?.trim() ?? "";
 
   const byEmail = new Map<string, { email: string; label: string; subtitle: string }>();
+
+  const accRes = await supabase
+    .from("user_connected_accounts")
+    .select("id, account_email, provider")
+    .eq("user_id", user.id);
+
+  if (!accRes.error && accRes.data) {
+    for (const row of accRes.data) {
+      const em = normalizeEmail(String(row.account_email ?? ""));
+      if (!isEmail(em) || byEmail.has(em)) continue;
+      const p = String(row.provider ?? "");
+      const sub =
+        p === "google"
+          ? "Connected Google account"
+          : p === "microsoft"
+            ? "Connected Microsoft account"
+            : p === "imap"
+              ? "Connected email account"
+              : "Connected account";
+      byEmail.set(em, { email: em, label: em, subtitle: sub });
+    }
+  }
 
   const teamRes = await supabase
     .from("team_members")
@@ -127,6 +156,37 @@ export async function GET(req: Request) {
     }
   }
 
+  const googleIds =
+    !accRes.error && accRes.data
+      ? accRes.data.filter((r) => r.provider === "google").map((r) => String(r.id))
+      : [];
+  const uuidRe =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  let googleSearchOrder = googleIds;
+  if (preferredGoogleId && uuidRe.test(preferredGoogleId) && googleIds.includes(preferredGoogleId)) {
+    googleSearchOrder = [preferredGoogleId, ...googleIds.filter((id) => id !== preferredGoogleId)];
+  }
+
+  if (qRaw.length >= GOOGLE_OTHER_CONTACTS_MIN_QUERY && googleSearchOrder.length > 0) {
+    const tryIds = googleSearchOrder.slice(0, 2);
+    for (const accountId of tryIds) {
+      try {
+        const { accessToken } = await getValidGoogleAccessToken(supabase, user.id, accountId);
+        const rows = await searchGoogleOtherContacts(accessToken, qRaw);
+        for (const r of rows) {
+          const em = normalizeEmail(r.email);
+          if (!isEmail(em) || byEmail.has(em)) continue;
+          const dn = r.displayName?.trim();
+          const label = dn && !dn.includes("@") ? dn : em;
+          byEmail.set(em, { email: em, label, subtitle: "Google contacts" });
+        }
+      } catch (e) {
+        if (e instanceof GoogleIntegrationError) continue;
+        if (e instanceof GooglePeopleSearchError) continue;
+      }
+    }
+  }
+
   const list: FollowupRecipientSuggestion[] = [];
   for (const row of byEmail.values()) {
     if (!matchesQuery(q, row.email, row.label)) continue;
@@ -140,7 +200,16 @@ export async function GET(req: Request) {
     const al = a.label.toLowerCase().startsWith(q);
     const bl = b.label.toLowerCase().startsWith(q);
     if (al !== bl) return al ? -1 : 1;
-    const pr: Record<string, number> = { "Team member": 0, "Past follow-up": 1, "Task assignee": 2 };
+    const pr: Record<string, number> = {
+      "Team member": 0,
+      "Connected Google account": 1,
+      "Connected Microsoft account": 1,
+      "Connected email account": 1,
+      "Connected account": 1,
+      "Google contacts": 2,
+      "Past follow-up": 3,
+      "Task assignee": 4,
+    };
     const pa = pr[a.subtitle] ?? 9;
     const pb = pr[b.subtitle] ?? 9;
     if (pa !== pb) return pa - pb;

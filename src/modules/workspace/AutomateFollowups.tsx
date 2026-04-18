@@ -478,6 +478,7 @@ export function AutomateFollowups() {
                       onChange={setToRaw}
                       placeholder="you@company.com, teammate@company.com"
                       disabled={saving}
+                      googleAccountId={fromAccountId || undefined}
                     />
                     <p className="text-[11px] text-muted-foreground">
                       One or more addresses; comma or newline separated. Shared status link (same for everyone).
@@ -491,6 +492,7 @@ export function AutomateFollowups() {
                       onChange={setCcRaw}
                       placeholder="optional@company.com, …"
                       disabled={saving}
+                      googleAccountId={fromAccountId || undefined}
                     />
                     <p className="text-[11px] text-muted-foreground">Optional; comma or newline separated.</p>
                   </div>

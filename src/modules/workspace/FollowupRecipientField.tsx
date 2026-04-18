@@ -4,6 +4,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 
 import type { FollowupRecipientSuggestion } from "@/lib/followups/recipientSuggestionTypes";
+import { GOOGLE_OTHER_CONTACTS_MIN_QUERY } from "@/lib/integrations/google/googleOtherContactsSearch";
 
 function normalizeEmail(s: string): string {
   return s.trim().toLowerCase();
@@ -56,9 +57,11 @@ type Props = {
   onChange: (next: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Prefer this Google connected account for People “Other contacts” search (optional). */
+  googleAccountId?: string;
 };
 
-export function FollowupRecipientField({ id, value, onChange, disabled, placeholder }: Props) {
+export function FollowupRecipientField({ id, value, onChange, disabled, placeholder, googleAccountId }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
   const blurTimer = React.useRef<number | null>(null);
@@ -138,10 +141,17 @@ export function FollowupRecipientField({ id, value, onChange, disabled, placehol
       setItems([]);
       void (async () => {
         try {
-          const res = await fetch(
-            `/api/followups/recipient-suggestions?q=${encodeURIComponent(searchQ)}&limit=14`,
-            { credentials: "include", signal: ac.signal },
-          );
+          const qs = new URLSearchParams({
+            q: searchQ,
+            limit: "14",
+          });
+          if (googleAccountId?.trim()) {
+            qs.set("google_account_id", googleAccountId.trim());
+          }
+          const res = await fetch(`/api/followups/recipient-suggestions?${qs.toString()}`, {
+            credentials: "include",
+            signal: ac.signal,
+          });
           const j = (await res.json().catch(() => null)) as { suggestions?: FollowupRecipientSuggestion[] } | null;
           if (cancelled) return;
           setItems(Array.isArray(j?.suggestions) ? j.suggestions : []);
@@ -163,7 +173,7 @@ export function FollowupRecipientField({ id, value, onChange, disabled, placehol
       setDebouncing(false);
       setLoading(false);
     };
-  }, [open, disabled, searchQ]);
+  }, [open, disabled, searchQ, googleAccountId]);
 
   const clearBlurTimer = () => {
     if (blurTimer.current != null) {
@@ -213,8 +223,8 @@ export function FollowupRecipientField({ id, value, onChange, disabled, placehol
         ) : null}
         {!debouncing && !loading && items.length === 0 && hasSearched ? (
           <div className="px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-            No saved suggestions yet. Add team members, assign tasks to emails, or send a follow-up once to build this
-            list.
+            No matches. Type at least {GOOGLE_OTHER_CONTACTS_MIN_QUERY} characters to search Google contacts, or add
+            team members / task assignee emails — connected account addresses appear automatically.
           </div>
         ) : null}
         {items.map((row) => (
