@@ -17,6 +17,27 @@ function hhmm(t?: string | null) {
   return String(t).slice(0, 5);
 }
 
+function briefTimeToMinutes(t: string | null | undefined): number | null {
+  if (t == null || String(t).trim() === "") return null;
+  const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Math.min(23, parseInt(m[1], 10));
+  const min = Math.min(59, parseInt(m[2], 10));
+  return h * 60 + min;
+}
+
+function normBriefTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/["'`]+/g, "")
+    .trim();
+}
+
+function briefDedupeKey(timeMins: number | null, title: string): string {
+  return `${timeMins == null ? "untimed" : String(timeMins)}|${normBriefTitle(title)}`;
+}
+
 export function buildDayBriefInput(tasks: Task[], events: Event[]) {
   const today = ymdToday();
   const pending = tasks.filter((t) => t.status === "pending");
@@ -24,9 +45,16 @@ export function buildDayBriefInput(tasks: Task[], events: Event[]) {
     .filter((t) => t.due_date === today)
     .sort((a, b) => (a.due_time ?? "").localeCompare(b.due_time ?? ""));
 
-  const todayEvents = events
+  const todayEventsRaw = events
     .filter((e) => e.date === today)
     .sort((a, b) => String(a.time ?? "").localeCompare(String(b.time ?? "")));
+
+  const taskDedupeKeys = new Set(
+    todayTasks.map((t) => briefDedupeKey(briefTimeToMinutes(t.due_time), t.title)),
+  );
+  const todayEvents = todayEventsRaw.filter(
+    (e) => !taskDedupeKeys.has(briefDedupeKey(briefTimeToMinutes(e.time), e.title ?? "")),
+  );
 
   return {
     today,
@@ -63,44 +91,56 @@ export function buildTodayActionBriefLines(
   const pendingToday = tasks.filter((t) => t.status === "pending" && t.due_date === todayYmd);
   const calToday = events.filter((e) => e.date === todayYmd);
 
-  const toMinutes = (t: string | null | undefined): number | null => {
-    if (t == null || String(t).trim() === "") return null;
-    const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
-    if (!m) return null;
-    const h = Math.min(23, parseInt(m[1], 10));
-    const min = Math.min(59, parseInt(m[2], 10));
-    return h * 60 + min;
-  };
-
   const timeLabel = (mins: number | null) =>
     mins == null ? "—" : `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 
-  type Row = { sort: number; line: string };
-  const rows: Row[] = [];
-
   const baseUntimed = 24 * 60 + 10_000;
 
-  for (const e of calToday) {
-    const mins = toMinutes(e.time);
-    const sort = mins ?? baseUntimed;
-    const tl = timeLabel(mins);
-    rows.push({
-      sort,
-      line: `${tl} · ${(e.title ?? "Untitled event").trim() || "Untitled event"} · Calendar`,
-    });
-  }
+  type BriefEntry = { sort: number; line: string; source: "task" | "calendar" };
+  const byKey = new Map<string, BriefEntry>();
 
   for (const t of pendingToday) {
-    const mins = toMinutes(t.due_time);
+    const mins = briefTimeToMinutes(t.due_time);
     const sort = mins ?? baseUntimed + 50_000;
     const tl = mins == null ? "Today" : String(t.due_time ?? "").slice(0, 5);
     const kind = t.type === "followup" ? "Follow-up" : t.type === "reminder" ? "Reminder" : "Todo";
-    rows.push({
+    const title = t.title.trim() || "Untitled";
+    const key = briefDedupeKey(mins, title);
+    byKey.set(key, {
       sort,
-      line: `${tl} · ${t.title.trim() || "Untitled"} · ${kind}`,
+      line: `${tl} · ${title} · ${kind}`,
+      source: "task",
     });
   }
 
+  for (const e of calToday) {
+    const mins = briefTimeToMinutes(e.time);
+    const sort = mins ?? baseUntimed;
+    const tl = timeLabel(mins);
+    const title = (e.title ?? "Untitled event").trim() || "Untitled event";
+    const key = briefDedupeKey(mins, title);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        sort,
+        line: `${tl} · ${title} · Calendar`,
+        source: "calendar",
+      });
+      continue;
+    }
+    if (existing.source === "task") {
+      if (!/ · Calendar$/.test(existing.line)) {
+        existing.line = existing.line.replace(
+          / · (Follow-up|Reminder|Todo)$/,
+          (_m, k: string) => ` · ${k} · Calendar`,
+        );
+      }
+      continue;
+    }
+    // Same slot + title already recorded as a calendar-only row — drop duplicate calendar line.
+  }
+
+  const rows = [...byKey.values()];
   rows.sort((a, b) => a.sort - b.sort || a.line.localeCompare(b.line));
 
   if (rows.length === 0) {
