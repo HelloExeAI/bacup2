@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { calendarYmdInTimeZone } from "@/lib/email/calendarYmd";
+import { FollowupRecipientField } from "@/modules/workspace/FollowupRecipientField";
 import { useTaskStore, type Task } from "@/store/taskStore";
 import { useUserStore } from "@/store/userStore";
 
@@ -191,8 +192,8 @@ export function AutomateFollowups() {
       }
       if (!fromAccountId) throw new Error("Pick a connected Email account (Google) to send from.");
       const toEmails = parseRecipients(toRaw).filter(isEmail);
-      if (toEmails.length !== 1) {
-        throw new Error("Enter exactly one email in To (the person who can use the update link).");
+      if (toEmails.length === 0) {
+        throw new Error("Enter at least one valid email in To (comma or newline separated).");
       }
       const ccTokens = parseRecipients(ccRaw);
       for (const t of ccTokens) {
@@ -267,8 +268,9 @@ export function AutomateFollowups() {
       </div>
 
       <p className="mt-1 text-xs text-muted-foreground">
-        Open tasks sorted by assignee (self-assigned items are hidden). One email lists every selected task; set To and Cc
-        once. Tasks you already emailed stay here until the next calendar day, then move to history below.
+        Open tasks sorted by assignee (self-assigned items are hidden). One email lists every selected task; add To and
+        Cc recipients (multiple addresses allowed). Tasks you already emailed stay here until the next calendar day, then
+        move to history below.
       </p>
 
       {notice ? <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
@@ -355,8 +357,8 @@ export function AutomateFollowups() {
               <div>
                 <div className="text-sm font-semibold text-foreground">Follow up</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  Choose tasks, one To address, optional Cc. One message lists every selected task. Tone comes from your
-                  template in Settings → Communications.
+                  Choose tasks, add one or more To addresses and optional Cc (comma or newline separated). One message
+                  lists every selected task. Tone comes from your template in Settings → Communications.
                 </div>
               </div>
               <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
@@ -470,25 +472,25 @@ export function AutomateFollowups() {
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">To</div>
-                    <input
-                      className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    <FollowupRecipientField
+                      id="followup-to"
                       value={toRaw}
-                      onChange={(e) => setToRaw(e.target.value)}
-                      placeholder="assignee@company.com"
+                      onChange={setToRaw}
+                      placeholder="you@company.com, teammate@company.com"
                       disabled={saving}
-                      autoComplete="email"
                     />
-                    <p className="text-[11px] text-muted-foreground">Exactly one email (gets the no-login update link).</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      One or more addresses; comma or newline separated. Shared status link (same for everyone).
+                    </p>
                   </div>
                   <div className="space-y-1.5">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cc</div>
-                    <input
-                      className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                    <FollowupRecipientField
+                      id="followup-cc"
                       value={ccRaw}
-                      onChange={(e) => setCcRaw(e.target.value)}
+                      onChange={setCcRaw}
                       placeholder="optional@company.com, …"
                       disabled={saving}
-                      autoComplete="email"
                     />
                     <p className="text-[11px] text-muted-foreground">Optional; comma or newline separated.</p>
                   </div>

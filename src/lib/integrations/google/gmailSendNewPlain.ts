@@ -14,6 +14,7 @@ export async function sendGmailNewPlainMessage(params: {
   supabase: SupabaseClient;
   userId: string;
   accountId: string;
+  /** Comma-separated RFC 5322 To list (one or more addresses). */
   to: string;
   /** Comma-separated RFC 5322 Cc list (optional). */
   cc?: string;

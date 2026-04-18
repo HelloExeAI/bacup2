@@ -39,6 +39,18 @@ function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
+function dedupeEmailsPreserveOrder(emails: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const e of emails) {
+    const n = normalizeEmail(e);
+    if (!isEmail(n) || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
 function recipientGreeting(email: string): string {
   const local = email.split("@")[0] ?? "";
   const first = local.split(/[._-]/)[0] ?? "";
@@ -125,24 +137,17 @@ export async function POST(req: Request) {
 
   const titleById = new Map(rows.map((r) => [r.id as string, String(r.title ?? "").trim() || "Follow up"]));
 
-  const toTokens = parseRecipientTokens(parsed.data.to_raw).map(normalizeEmail);
-  const toEmails = toTokens.filter(isEmail);
+  const toEmails = dedupeEmailsPreserveOrder(parseRecipientTokens(parsed.data.to_raw).map(normalizeEmail));
   if (toEmails.length === 0) {
     return NextResponse.json(
-      { error: "missing_to", details: "Enter exactly one valid email in To." },
+      { error: "missing_to", details: "Enter at least one valid email in To (comma or newline separated)." },
       { status: 400 },
     );
   }
-  if (toEmails.length > 1) {
-    return NextResponse.json(
-      {
-        error: "multiple_to_emails",
-        details: "Enter only one email in To (the primary assignee for the update link). Add others in Cc.",
-      },
-      { status: 400 },
-    );
-  }
-  const to = toEmails[0]!;
+  const toSet = new Set(toEmails);
+  const toHeader = toEmails.join(", ");
+  /** Token row + template greeting use the first To; all recipients share the same status link. */
+  const primaryTo = toEmails[0]!;
 
   const ccRaw = (parsed.data.cc_raw ?? "").trim();
   const ccTokens = ccRaw ? parseRecipientTokens(ccRaw).map(normalizeEmail) : [];
@@ -154,7 +159,7 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    if (t === to) continue;
+    if (toSet.has(t)) continue;
     if (!ccEmails.includes(t)) ccEmails.push(t);
   }
   const ccHeader = ccEmails.length > 0 ? ccEmails.join(", ") : undefined;
@@ -192,7 +197,7 @@ export async function POST(req: Request) {
   const { token: followupToken, tokenHash } = mintAssigneeFollowupToken();
   const { error: tokErr } = await supabase.from("assignee_followup_tokens").insert({
     owner_user_id: user.id,
-    assignee_email: to,
+    assignee_email: primaryTo,
     task_ids: taskIds,
     token_hash: tokenHash,
     expires_at: new Date(Date.now() + ASSIGNEE_FOLLOWUP_TOKEN_TTL_MS).toISOString(),
@@ -210,8 +215,8 @@ export async function POST(req: Request) {
     task_bullets: taskBullets,
     task_count: taskCount,
     primary_task_title: primaryTitle,
-    recipient_greeting: recipientGreeting(to),
-    recipient_email: to,
+    recipient_greeting: recipientGreeting(primaryTo),
+    recipient_email: toEmails.length > 1 ? toHeader : primaryTo,
     sender_name: senderName,
     assignee_update_url,
     assignee_update_sentence,
@@ -226,7 +231,7 @@ export async function POST(req: Request) {
     supabase,
     userId: user.id,
     accountId: acc.id,
-    to,
+    to: toHeader,
     ...(ccHeader ? { cc: ccHeader } : {}),
     subject,
     textPlain,
@@ -234,10 +239,10 @@ export async function POST(req: Request) {
 
   const results: Array<{ to: string; ok: boolean; error?: string; detail?: unknown; task_count?: number }> = [];
   if (sendRes.ok) {
-    results.push({ to, ok: true, task_count: titles.length });
+    results.push({ to: toHeader, ok: true, task_count: titles.length });
   } else {
     results.push({
-      to,
+      to: toHeader,
       ok: false,
       error: sendRes.error,
       detail: "detail" in sendRes ? sendRes.detail : undefined,
@@ -251,7 +256,7 @@ export async function POST(req: Request) {
     channel: "email",
     from_provider: acc.provider,
     from_account_id: acc.id,
-    unique_recipients: results.length,
+    unique_recipients: toEmails.length + ccEmails.length,
     ok_count: okCount,
     fail_count: failCount,
     task_count: taskIds.length,
