@@ -10,6 +10,7 @@ import type { SubscriptionStatus, UserSettingsRow } from "@/modules/settings/typ
 import { AddOnsSection } from "./AddOnsSection";
 import { CurrentPlanCard } from "./CurrentPlanCard";
 import { PlanCard } from "./PlanCard";
+import { RazorpayCheckoutButton } from "@/components/payments/RazorpayCheckoutButton";
 
 type CurrentPlanApi = {
   plan: BacupTierId;
@@ -225,6 +226,16 @@ export function BillingPage({
           >
             Yearly
           </Button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border/60 bg-background/40 p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Payments (Razorpay)</div>
+        <div className="mt-2 text-sm text-muted-foreground">
+          Standard Checkout test button. This only verifies the Razorpay signature server-side (no DB writes yet).
+        </div>
+        <div className="mt-3">
+          <RazorpayCheckoutButton amountPaise={100} receipt="bacup_test_100" label="Pay ₹1 (test)" />
         </div>
       </div>
       <p className="text-[10px] text-muted-foreground">

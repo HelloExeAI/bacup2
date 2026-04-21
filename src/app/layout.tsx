@@ -23,6 +23,10 @@ export const metadata: Metadata = {
   },
   description: "Personal operating system for life and work — tasks, calendar, scratchpad, and Ask Bacup.",
   applicationName: "Bacup",
+  icons: {
+    icon: "/brand/icon.png",
+    apple: "/brand/icon.png",
+  },
 };
 
 /** Default light; boot script + ThemeProvider align with `bacup-theme` and update meta. */

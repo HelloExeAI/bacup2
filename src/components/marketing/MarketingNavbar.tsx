@@ -16,18 +16,15 @@ const HOME_NAV = [
 
 function FeedLogo({ className = "" }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width="22"
-      height="22"
-      viewBox="0 0 22 22"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/icon.png"
+      alt=""
       aria-hidden
-    >
-      <path d="M11 4L18 11L11 18V4Z" fill="currentColor" />
-      <rect x="4" y="5" width="2.5" height="12" rx="0.5" fill="currentColor" />
-    </svg>
+      width={22}
+      height={22}
+      className={["rounded-sm", className].join(" ")}
+    />
   );
 }
 
