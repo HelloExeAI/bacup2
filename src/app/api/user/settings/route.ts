@@ -85,6 +85,7 @@ const SettingsPatchSchema = z
     subscription_status: z.enum(["active", "trial", "expired", "canceled"]).optional(),
     current_period_end: z.union([z.string().max(40), z.null()]).optional(),
     ask_bacup_addon: z.boolean().optional(),
+    date_display_format: z.enum(["ymd", "dmy", "mdy"]).optional(),
     clock_display_format: z.enum(["12h", "24h"]).optional(),
   })
   .strict();

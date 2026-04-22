@@ -37,6 +37,8 @@ export type UserSettingsRow = {
   /** ISO timestamp or null when not set (e.g. before first activation). */
   current_period_end: string | null;
   ask_bacup_addon: boolean;
+  /** Task/date UI preference shared across web + mobile. */
+  date_display_format: "ymd" | "dmy" | "mdy";
   clock_display_format: ClockDisplayFormat;
   clock_timezone_source: ClockTimezoneSource;
   updated_at: string;

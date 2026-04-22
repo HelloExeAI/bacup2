@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { MissingEnvScreen } from "@/components/MissingEnvScreen";
 import { AuthProvider } from "@/context/AuthContext";
+import { PreferencesProvider } from "@/context/PreferencesContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { readSupabaseEnv } from "@/lib/env";
 
@@ -17,8 +18,10 @@ export default function RootLayout() {
           <MissingEnvScreen />
         ) : (
           <AuthProvider>
-            <StatusBar style="auto" />
-            <Stack screenOptions={{ headerShown: false }} />
+            <PreferencesProvider>
+              <StatusBar style="auto" />
+              <Stack screenOptions={{ headerShown: false }} />
+            </PreferencesProvider>
           </AuthProvider>
         )}
       </ThemeProvider>

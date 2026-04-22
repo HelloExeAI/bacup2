@@ -1,15 +1,44 @@
 import * as React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAppTheme } from "@/context/ThemeContext";
 
-export function KpiTile({ label, value }: { label: string; value: number | string }) {
+export function KpiTile({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: number | string;
+  onPress?: () => void;
+}) {
   const { theme } = useAppTheme();
-  return (
-    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+  const content = (
+    <>
       <Text style={[styles.value, { color: theme.foreground }]}>{value}</Text>
       <Text style={[styles.label, { color: theme.mutedForeground }]}>{label}</Text>
-    </View>
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+      ]}
+    >
+      {content}
+    </Pressable>
   );
 }
 

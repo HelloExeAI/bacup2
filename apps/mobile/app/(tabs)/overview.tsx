@@ -1,5 +1,6 @@
 import * as React from "react";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
 
 import { KpiTile } from "@/components/KpiTile";
 import { Screen } from "@/components/Screen";
@@ -51,18 +52,12 @@ export default function OverviewTab() {
       }
     >
       <View style={styles.row}>
-        <KpiTile label="Overdue" value={stats.overdue} />
-        <KpiTile label="Due today" value={stats.todaysLoad} />
+        <KpiTile label="Overdue" value={stats.overdue} onPress={() => router.push({ pathname: "/(tabs)/tasks", params: { filter: "overdue" } })} />
+        <KpiTile label="Due today" value={stats.todaysLoad} onPress={() => router.push({ pathname: "/(tabs)/tasks", params: { filter: "today" } })} />
       </View>
       <View style={styles.row}>
-        <KpiTile label="Follow-ups" value={stats.waitingFollowups} />
-        <KpiTile label="Priorities" value={stats.activePriorities} />
-      </View>
-      <View style={[styles.banner, { backgroundColor: theme.muted, borderColor: theme.border }]}>
-        <Text style={[styles.bannerTitle, { color: theme.foreground }]}>Open actions</Text>
-        <Text style={[styles.bannerMeta, { color: theme.mutedForeground }]}>
-          {stats.pendingTotal} pending tasks · pull to refresh
-        </Text>
+        <KpiTile label="Follow-ups" value={stats.waitingFollowups} onPress={() => router.push({ pathname: "/(tabs)/tasks", params: { filter: "followups" } })} />
+        <KpiTile label="Priorities" value={stats.activePriorities} onPress={() => router.push({ pathname: "/(tabs)/tasks", params: { filter: "priorities" } })} />
       </View>
 
       <View style={[styles.briefCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
@@ -79,9 +74,6 @@ export default function OverviewTab() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 8 },
-  banner: { marginTop: 8, padding: 14, borderRadius: 14, borderWidth: 1 },
-  bannerTitle: { fontSize: 14, fontWeight: "700" },
-  bannerMeta: { marginTop: 4, fontSize: 12 },
   briefCard: { marginTop: 14, padding: 14, borderRadius: 14, borderWidth: 1 },
   briefTitle: { fontSize: 14, fontWeight: "700", marginBottom: 8 },
   briefLine: { fontSize: 13, lineHeight: 20, marginBottom: 4 },

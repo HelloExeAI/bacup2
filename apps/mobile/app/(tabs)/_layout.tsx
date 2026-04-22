@@ -33,6 +33,20 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="tasks"
+        options={{
+          // Hidden screen used for KPI drill-down lists.
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="task/[id]"
+        options={{
+          // Hidden screen used for task editing.
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="meetings"
         options={{
           title: "Meetings",

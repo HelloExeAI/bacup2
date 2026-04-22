@@ -521,6 +521,7 @@ export function SettingsModal({
             subscription_status: settings.subscription_status,
             current_period_end: settings.current_period_end,
             ask_bacup_addon: settings.ask_bacup_addon,
+            date_display_format: settings.date_display_format,
             clock_display_format: settings.clock_display_format,
           },
         }),
@@ -562,6 +563,7 @@ export function SettingsModal({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           settings: {
+            date_display_format: settings.date_display_format,
             clock_display_format: settings.clock_display_format,
           },
         }),
@@ -584,6 +586,21 @@ export function SettingsModal({
       setSaving(false);
     }
   };
+
+  // Auto-save preferences after short debounce.
+  const prefSaveTimer = React.useRef<number | null>(null);
+  const queuePreferenceAutosave = React.useCallback(() => {
+    if (prefSaveTimer.current) window.clearTimeout(prefSaveTimer.current);
+    prefSaveTimer.current = window.setTimeout(() => {
+      void saveClockPreferencesOnly();
+    }, 450);
+  }, [saveClockPreferencesOnly]);
+
+  React.useEffect(() => {
+    return () => {
+      if (prefSaveTimer.current) window.clearTimeout(prefSaveTimer.current);
+    };
+  }, []);
 
   const changePassword = async () => {
     if (newPassword.length < 8) {
@@ -856,7 +873,25 @@ export function SettingsModal({
               </div>
             ) : tab === "preferences" ? (
               <div className="space-y-4">
-                <p className="text-[13px] text-muted-foreground">Choose 12-hour or 24-hour for the top bar clock.</p>
+                <p className="text-[13px] text-muted-foreground">
+                  Date/time preferences apply across the web app and mobile.
+                </p>
+                <Field label="Date format">
+                  <select
+                    className="h-10 w-full max-w-md rounded-md border border-foreground/10 bg-background px-3 text-sm"
+                    value={settings.date_display_format}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const v = raw === "dmy" || raw === "mdy" ? raw : "ymd";
+                      patchSettings({ date_display_format: v });
+                      queuePreferenceAutosave();
+                    }}
+                  >
+                    <option value="ymd">YYYY-MM-DD</option>
+                    <option value="dmy">DD-MM-YYYY</option>
+                    <option value="mdy">MM-DD-YYYY</option>
+                  </select>
+                </Field>
                 <Field label="Clock format">
                   <select
                     className="h-10 w-full max-w-md rounded-md border border-foreground/10 bg-background px-3 text-sm"
@@ -865,19 +900,14 @@ export function SettingsModal({
                       const v = e.target.value === "24h" ? "24h" : "12h";
                       patchSettings({ clock_display_format: v });
                       useClockPreferencesStore.getState().setClockDisplayFormat(v);
+                      queuePreferenceAutosave();
                     }}
                   >
                     <option value="12h">12-hour (AM / PM)</option>
                     <option value="24h">24-hour</option>
                   </select>
                 </Field>
-                <Button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void saveClockPreferencesOnly()}
-                >
-                  Save preferences
-                </Button>
+                <p className="text-[11px] text-muted-foreground">Saved automatically.</p>
               </div>
             ) : tab === "security" ? (
               <div className="space-y-8">

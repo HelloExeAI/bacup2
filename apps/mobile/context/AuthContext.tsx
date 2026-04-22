@@ -86,16 +86,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     void (async () => {
-      const { data } = await sb.auth.getSession();
-      if (cancelled) return;
-      setSession(data.session ?? null);
-      if (data.session?.user) await refreshData();
-      setLoading(false);
+      try {
+        const { data } = await sb.auth.getSession();
+        if (cancelled) return;
+        setSession(data.session ?? null);
+        // Never block the initial render on network calls.
+        if (data.session?.user) void refreshData();
+      } catch (e) {
+        console.warn(
+          "[bacup-mobile] auth.getSession failed",
+          e instanceof Error ? e.message : String(e),
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
 
     const { data: sub } = sb.auth.onAuthStateChange(async (_evt, s) => {
       setSession(s);
-      if (s?.user) await refreshData();
+      if (s?.user) void refreshData();
       else {
         setTasks([]);
         setEvents([]);

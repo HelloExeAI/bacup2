@@ -4,11 +4,13 @@ import { router } from "expo-router";
 
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/context/AuthContext";
+import { usePreferences } from "@/context/PreferencesContext";
 import { useAppTheme } from "@/context/ThemeContext";
 
 export default function SettingsTab() {
   const { user, refreshData, signOut } = useAuth();
   const { scheme, setScheme, theme } = useAppTheme();
+  const { dateFormat, timeFormat, setDateFormat, setTimeFormat } = usePreferences();
   const [refreshing, setRefreshing] = React.useState(false);
 
   async function onRefresh() {
@@ -62,6 +64,65 @@ export default function SettingsTab() {
         </Pressable>
       </View>
 
+      <Text style={[styles.section, { color: theme.mutedForeground }]}>Date & time</Text>
+      <Text style={[styles.subnote, { color: theme.mutedForeground }]}>
+        Applies across mobile and web. Tasks still sync in ISO under the hood.
+      </Text>
+      <View style={styles.row}>
+        <Pressable
+          onPress={() => setDateFormat("ymd")}
+          style={[
+            styles.chip,
+            { borderColor: theme.border, backgroundColor: theme.muted },
+            dateFormat === "ymd" && { borderColor: theme.accent, borderWidth: 2 },
+          ]}
+        >
+          <Text style={{ color: theme.foreground, fontWeight: "600" }}>YYYY-MM-DD</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setDateFormat("dmy")}
+          style={[
+            styles.chip,
+            { borderColor: theme.border, backgroundColor: theme.muted },
+            dateFormat === "dmy" && { borderColor: theme.accent, borderWidth: 2 },
+          ]}
+        >
+          <Text style={{ color: theme.foreground, fontWeight: "600" }}>DD-MM-YYYY</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setDateFormat("mdy")}
+          style={[
+            styles.chip,
+            { borderColor: theme.border, backgroundColor: theme.muted },
+            dateFormat === "mdy" && { borderColor: theme.accent, borderWidth: 2 },
+          ]}
+        >
+          <Text style={{ color: theme.foreground, fontWeight: "600" }}>MM-DD-YYYY</Text>
+        </Pressable>
+      </View>
+      <View style={styles.row}>
+        <Pressable
+          onPress={() => setTimeFormat("24h")}
+          style={[
+            styles.chip,
+            { borderColor: theme.border, backgroundColor: theme.muted },
+            timeFormat === "24h" && { borderColor: theme.accent, borderWidth: 2 },
+          ]}
+        >
+          <Text style={{ color: theme.foreground, fontWeight: "600" }}>24h</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setTimeFormat("12h")}
+          style={[
+            styles.chip,
+            { borderColor: theme.border, backgroundColor: theme.muted },
+            timeFormat === "12h" && { borderColor: theme.accent, borderWidth: 2 },
+          ]}
+        >
+          <Text style={{ color: theme.foreground, fontWeight: "600" }}>12h</Text>
+        </Pressable>
+      </View>
+
       <Pressable style={[styles.signOut, { borderColor: theme.border }]} onPress={() => void onSignOut()}>
         <Text style={{ color: "#b91c1c", fontWeight: "700" }}>Sign out</Text>
       </Pressable>
@@ -74,7 +135,8 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   value: { marginTop: 6, fontSize: 16 },
   section: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, marginBottom: 10 },
-  row: { flexDirection: "row", gap: 10, marginBottom: 24 },
+  subnote: { fontSize: 12, lineHeight: 18, marginBottom: 12 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 14 },
   chip: {
     paddingVertical: 10,
     paddingHorizontal: 16,

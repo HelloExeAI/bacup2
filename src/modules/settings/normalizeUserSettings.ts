@@ -54,6 +54,10 @@ function coerceFollowupEmailBody(v: unknown): string {
   return v.trim().slice(0, 20000);
 }
 
+function coerceDateDisplayFormat(v: unknown): UserSettingsRow["date_display_format"] {
+  return v === "dmy" || v === "mdy" ? v : "ymd";
+}
+
 /**
  * Merge a raw `user_settings` row (or null) with DB defaults so the UI always gets a complete object.
  */
@@ -115,6 +119,7 @@ export function normalizeUserSettingsRow(
         ? r.current_period_end.trim()
         : null,
     ask_bacup_addon: coerceBool(r.ask_bacup_addon, false),
+    date_display_format: coerceDateDisplayFormat(r.date_display_format),
     clock_display_format: coerceClockDisplayFormat(r.clock_display_format),
     clock_timezone_source: "device",
     updated_at: updatedAt,
