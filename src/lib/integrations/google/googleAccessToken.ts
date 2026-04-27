@@ -1,40 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { googleClientId, googleClientSecret } from "@/lib/integrations/google/googleEnv";
+import { googleClientId, googleClientSecret, googleMobileOAuthClientId } from "@/lib/integrations/google/googleEnv";
 import type { GoogleTokenResponse } from "@/lib/integrations/google/googleTokenExchange";
 import { GOOGLE_TOKEN_URL } from "@/lib/integrations/google/oauthConstants";
 
-export async function refreshGoogleAccessToken(refreshToken: string): Promise<GoogleTokenResponse> {
-  const clientId = googleClientId();
-  const clientSecret = googleClientSecret();
-  if (!clientId || !clientSecret) {
-    throw new Error("Google OAuth not configured");
-  }
-
-  const body = new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
-
-  const res = await fetch(GOOGLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-
-  const j = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!res.ok) {
-    const err = typeof j?.error === "string" ? j.error : "token_error";
-    const desc = typeof j?.error_description === "string" ? j.error_description : "";
-    throw new Error(`Google refresh failed: ${err}${desc ? ` — ${desc}` : ""}`);
-  }
-
+function parseGoogleTokenResponse(j: Record<string, unknown> | null): GoogleTokenResponse {
   const access_token = typeof j?.access_token === "string" ? j.access_token : "";
   const expires_in = typeof j?.expires_in === "number" ? j.expires_in : 3600;
   if (!access_token) throw new Error("Google refresh missing access_token");
-
   return {
     access_token,
     expires_in,
@@ -42,6 +15,74 @@ export async function refreshGoogleAccessToken(refreshToken: string): Promise<Go
     scope: typeof j?.scope === "string" ? j.scope : undefined,
     token_type: typeof j?.token_type === "string" ? j.token_type : "Bearer",
   };
+}
+
+async function postGoogleTokenRefresh(body: URLSearchParams): Promise<{
+  ok: boolean;
+  json: Record<string, unknown> | null;
+}> {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  return { ok: res.ok, json };
+}
+
+function refreshErrorMessage(json: Record<string, unknown> | null): string {
+  const err = typeof json?.error === "string" ? json.error : "token_error";
+  const desc = typeof json?.error_description === "string" ? json.error_description : "";
+  return `Google refresh failed: ${err}${desc ? ` — ${desc}` : ""}`;
+}
+
+/**
+ * Web OAuth issues refresh tokens bound to `GOOGLE_CLIENT_ID` + secret.
+ * Expo (iOS) native OAuth issues tokens bound to the iOS client id — refresh **without** secret.
+ */
+export async function refreshGoogleAccessToken(refreshToken: string): Promise<GoogleTokenResponse> {
+  const webId = googleClientId();
+  const webSecret = googleClientSecret();
+  const mobileId = googleMobileOAuthClientId();
+
+  if (webId && webSecret) {
+    const { ok, json } = await postGoogleTokenRefresh(
+      new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: webId,
+        client_secret: webSecret,
+      }),
+    );
+    if (ok && json) return parseGoogleTokenResponse(json);
+    const oauthErr = typeof json?.error === "string" ? json.error : "";
+    if (oauthErr === "unauthorized_client" && mobileId) {
+      const second = await postGoogleTokenRefresh(
+        new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+          client_id: mobileId,
+        }),
+      );
+      if (second.ok && second.json) return parseGoogleTokenResponse(second.json);
+      throw new Error(refreshErrorMessage(second.json));
+    }
+    throw new Error(refreshErrorMessage(json));
+  }
+
+  if (mobileId) {
+    const { ok, json } = await postGoogleTokenRefresh(
+      new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: mobileId,
+      }),
+    );
+    if (ok && json) return parseGoogleTokenResponse(json);
+    throw new Error(refreshErrorMessage(json));
+  }
+
+  throw new Error("Google OAuth not configured (set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET and/or GOOGLE_MOBILE_OAUTH_CLIENT_ID).");
 }
 
 export type GoogleConnectedRow = {

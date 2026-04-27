@@ -15,16 +15,17 @@ function stateSecret(): string {
 const TTL_MS = 10 * 60 * 1000;
 
 /** Signed, tamper-proof state bound to Supabase user id (CSRF + session binding). */
-export function encodeGoogleOAuthState(userId: string): string {
+export function encodeGoogleOAuthState(userId: string, returnTo?: string | null): string {
   const exp = Date.now() + TTL_MS;
   const nonce = nodeRandomBytes(12).toString("hex");
-  const payload = `${userId}|${exp}|${nonce}`;
+  const rt = returnTo?.trim() ? Buffer.from(returnTo.trim().slice(0, 500), "utf8").toString("base64url") : "";
+  const payload = rt ? `${userId}|${exp}|${nonce}|${rt}` : `${userId}|${exp}|${nonce}`;
   const sig = createHmac("sha256", stateSecret()).update(payload).digest("base64url");
   const token = `${payload}|${sig}`;
   return Buffer.from(token, "utf8").toString("base64url");
 }
 
-export function decodeGoogleOAuthState(state: string): { userId: string } {
+export function decodeGoogleOAuthState(state: string): { userId: string; returnTo?: string } {
   let raw: string;
   try {
     raw = Buffer.from(state, "base64url").toString("utf8");
@@ -36,8 +37,8 @@ export function decodeGoogleOAuthState(state: string): { userId: string } {
   const payload = raw.slice(0, last);
   const sig = raw.slice(last + 1);
   const parts = payload.split("|");
-  if (parts.length !== 3) throw new Error("Invalid state");
-  const [userId, expStr, nonce] = parts;
+  if (parts.length !== 3 && parts.length !== 4) throw new Error("Invalid state");
+  const [userId, expStr, nonce, rt] = parts as [string, string, string, string?];
   const exp = Number(expStr);
   if (!userId || !nonce || !Number.isFinite(exp) || Date.now() > exp) {
     throw new Error("State expired");
@@ -47,6 +48,14 @@ export function decodeGoogleOAuthState(state: string): { userId: string } {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     throw new Error("Invalid state signature");
+  }
+  if (rt) {
+    try {
+      const returnTo = Buffer.from(rt, "base64url").toString("utf8").trim();
+      if (returnTo) return { userId, returnTo };
+    } catch {
+      /* ignore */
+    }
   }
   return { userId };
 }

@@ -6,6 +6,8 @@ import { MissingEnvScreen } from "@/components/MissingEnvScreen";
 import { AuthProvider } from "@/context/AuthContext";
 import { PreferencesProvider } from "@/context/PreferencesContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { SaveFeedbackProvider } from "@/context/SaveFeedbackContext";
+import { UserSettingsProvider } from "@/context/UserSettingsContext";
 import { readSupabaseEnv } from "@/lib/env";
 
 export default function RootLayout() {
@@ -19,8 +21,12 @@ export default function RootLayout() {
         ) : (
           <AuthProvider>
             <PreferencesProvider>
-              <StatusBar style="auto" />
-              <Stack screenOptions={{ headerShown: false }} />
+              <UserSettingsProvider>
+                <SaveFeedbackProvider>
+                  <StatusBar style="auto" />
+                  <Stack screenOptions={{ headerShown: false }} />
+                </SaveFeedbackProvider>
+              </UserSettingsProvider>
             </PreferencesProvider>
           </AuthProvider>
         )}

@@ -882,13 +882,16 @@ export function SettingsModal({
                     value={settings.date_display_format}
                     onChange={(e) => {
                       const raw = e.target.value;
-                      const v = raw === "dmy" || raw === "mdy" ? raw : "ymd";
+                      const v =
+                        raw === "dmy" || raw === "mdy" || raw === "dmy_yy" || raw === "dmy_mon_yy" ? raw : "ymd";
                       patchSettings({ date_display_format: v });
                       queuePreferenceAutosave();
                     }}
                   >
                     <option value="ymd">YYYY-MM-DD</option>
                     <option value="dmy">DD-MM-YYYY</option>
+                    <option value="dmy_yy">DD-MM-YY</option>
+                    <option value="dmy_mon_yy">DD-Mon-YY</option>
                     <option value="mdy">MM-DD-YYYY</option>
                   </select>
                 </Field>

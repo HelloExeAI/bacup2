@@ -104,7 +104,7 @@ Rules:
 - due_date must be YYYY-MM-DD or null.
 - due_time must be HH:MM (24h) or null.
 - Deadlines: use null for both due_date and due_time unless the transcript states a specific time or calendar day. Never invent a clock time. If you set both, they must be strictly AFTER the meeting end local wall time given in the user message (same calendar semantics as the user's device).
-- assigned_to must be an empty string "" for every item (the user will assign later).
+- assigned_to: who owns the action item. Use "self" when the user owns it. Use a person's name/email if explicitly stated. Otherwise "".
 - If an item is a decision, status update, or discussion, DO NOT include it.
 - If nothing is actionable, return [].
 `;
@@ -235,6 +235,8 @@ export async function processMeetingSessionStop(
     .single();
   if (childErr) return { status: 500, error: childErr.message };
 
+  const transcriptNoteId = String(child?.id ?? "");
+
   let extracted: ParsedTask[] = [];
   let actionTokens = 0;
 
@@ -253,19 +255,34 @@ export async function processMeetingSessionStop(
     extracted = parseTasks(transcript).map((t) => ({ ...t, assigned_to: "" }));
   }
 
+  const userEmail = String((user as any).email ?? "").trim().toLowerCase();
+  const meetingYmdLocal = meeting_end_local.ymd;
+
+  const isSelfAssignee = (raw: unknown) => {
+    const s = String(raw ?? "").trim().toLowerCase();
+    if (!s) return true; // treat unknown as self for now
+    if (s === "self" || s === "me" || s === "myself" || s === "i") return true;
+    if (userEmail && s === userEmail) return true;
+    return false;
+  };
+
   const tasksToInsert = extracted.slice(0, 50).map((t) => {
     const { due_date, due_time } = clampDueAfterMeetingEnd(t.due_date, t.due_time, meeting_end_local);
+    const self = isSelfAssignee((t as any).assigned_to);
+    const nextDueDate = due_date ?? (self ? meetingYmdLocal : meetingYmdLocal);
+    const nextType = self ? normalizeTaskType(t.type) : ("followup" as const);
+    const assignedTo = self ? "" : String((t as any).assigned_to ?? "").trim().slice(0, 120);
     return {
       user_id: user.id,
       title: t.title,
       description: t.description?.trim() ? t.description.trim() : null,
-      due_date,
+      due_date: nextDueDate,
       due_time,
-      type: t.type,
-      assigned_to: "",
+      type: nextType,
+      assigned_to: assignedTo,
       status: "pending",
       completed_at: null,
-      source: "scratchpad",
+      source: apiKey ? "ai" : "scratchpad",
     };
   });
 
@@ -281,9 +298,64 @@ export async function processMeetingSessionStop(
     await recordOpenAITokenUsage(supabase, user.id, totalTokens);
   }
 
+  // Generate and store a meeting summary after every meeting (so the client doesn't need to run OpenAI on view).
+  if (apiKey && transcriptNoteId) {
+    try {
+      const quota = await assertOpenAIQuotaAvailable(supabase, user.id, 1200);
+      if (quota.ok) {
+        const system = [
+          "You summarize meeting transcripts for a productivity app.",
+          "Return STRICT JSON only with keys: summary, decisions, actionItems.",
+          "summary: 1-2 sentences, crisp.",
+          "decisions: array of strings (0-8). Only explicit decisions/agreements.",
+          "actionItems: array of strings (0-10). Only explicit tasks; include owner if explicitly stated.",
+          "No markdown, no bullets, no extra keys.",
+        ].join(\"\\n\");
+
+        const userMsg = `Transcript:\\n${transcriptBody.slice(0, 40_000)}`;
+        const resp = await fetch(\"https://api.openai.com/v1/chat/completions\", {
+          method: \"POST\",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            \"Content-Type\": \"application/json\",
+          },
+          body: JSON.stringify({
+            model: \"gpt-4o-mini\",
+            temperature: 0.2,
+            messages: [
+              { role: \"system\", content: system },
+              { role: \"user\", content: userMsg },
+            ],
+            max_tokens: 520,
+          }),
+        });
+        const body = await resp.json().catch(() => null);
+        if (resp.ok) {
+          const usage = extractOpenAIUsageFromChatCompletion(body);
+          if (usage && usage.totalTokens > 0) {
+            await recordOpenAITokenUsage(supabase, user.id, usage.totalTokens);
+          }
+          const text: string =
+            body?.choices?.[0]?.message?.content ?? body?.choices?.[0]?.message?.text ?? \"\";
+          const raw = String(text ?? \"\").trim();
+          // Store on the parent meeting note.
+          await supabase.from(\"notes\").insert({
+            user_id: user.id,
+            content: raw,
+            type: \"meeting_ai_summary\",
+            parent_id: parentId,
+            parsed: true,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal: meeting should still save even if summary fails.
+    }
+  }
+
   return {
     parent_note_id: parentId,
-    child_note_id: String(child?.id ?? ""),
+    child_note_id: transcriptNoteId,
     tasks: savedTasks,
   };
 }

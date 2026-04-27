@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabaseFromBearer } from "@/lib/supabase/bearerFromRequest";
 import { googleClientId, googleClientSecret, googleRedirectUriFromRequest } from "@/lib/integrations/google/googleEnv";
 import { GOOGLE_AUTH_URL, GOOGLE_OAUTH_SCOPES } from "@/lib/integrations/google/oauthConstants";
 import { encodeGoogleOAuthState } from "@/lib/integrations/google/oauthState";
@@ -21,6 +22,36 @@ export async function GET(req: Request) {
       );
     }
 
+    const accept = req.headers.get("accept") || "";
+    const wantsJson = accept.includes("application/json");
+
+    // Mobile: allow Bearer auth (no cookie session) and return JSON with URL.
+    const bearer = supabaseFromBearer(req);
+    if (bearer) {
+      const {
+        data: { user },
+        error: userErr,
+      } = await bearer.auth.getUser();
+      if (userErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+      const { searchParams } = new URL(req.url);
+      const returnTo = searchParams.get("return_to");
+      const state = encodeGoogleOAuthState(user.id, returnTo);
+      const redirectUri = googleRedirectUriFromRequest(req);
+
+      const url = new URL(GOOGLE_AUTH_URL);
+      url.searchParams.set("client_id", clientId);
+      url.searchParams.set("redirect_uri", redirectUri);
+      url.searchParams.set("response_type", "code");
+      url.searchParams.set("scope", [...GOOGLE_OAUTH_SCOPES].join(" "));
+      url.searchParams.set("state", state);
+      url.searchParams.set("access_type", "offline");
+      url.searchParams.set("prompt", "select_account consent");
+      url.searchParams.set("include_granted_scopes", "true");
+
+      return NextResponse.json({ url: url.toString() });
+    }
+
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
@@ -28,11 +59,14 @@ export async function GET(req: Request) {
     } = await supabase.auth.getUser();
 
     if (userErr || !user) {
+      if (wantsJson) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       const login = new URL("/signin", new URL(req.url).origin);
       return NextResponse.redirect(login);
     }
 
-    const state = encodeGoogleOAuthState(user.id);
+    const { searchParams } = new URL(req.url);
+    const returnTo = searchParams.get("return_to");
+    const state = encodeGoogleOAuthState(user.id, returnTo);
     const redirectUri = googleRedirectUriFromRequest(req);
 
     const url = new URL(GOOGLE_AUTH_URL);

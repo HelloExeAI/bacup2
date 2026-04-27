@@ -10,10 +10,12 @@ import { useAppTheme } from "@/context/ThemeContext";
 import { formatDate, formatTime } from "@/lib/dateTimePrefs";
 import { isTaskOverdue, ymdToday } from "@/lib/taskStats";
 
-type Filter = "overdue" | "today" | "followups" | "priorities";
+type Filter = "pending" | "overdue" | "today" | "followups" | "priorities";
 
 function titleForFilter(filter: Filter) {
   switch (filter) {
+    case "pending":
+      return "Pending";
     case "overdue":
       return "Overdue";
     case "today":
@@ -29,6 +31,8 @@ function applyFilter(tasks: TaskRow[], filter: Filter): TaskRow[] {
   const pending = tasks.filter((t) => t.status === "pending");
   const today = ymdToday();
   switch (filter) {
+    case "pending":
+      return pending;
     case "overdue":
       return pending.filter((t) => isTaskOverdue(t));
     case "today":
@@ -52,12 +56,13 @@ export default function TasksKpiList() {
   const { dateFormat, timeFormat } = usePreferences();
   const params = useLocalSearchParams();
 
-  const filter: Filter = (params.filter === "overdue" ||
+  const filter: Filter = (params.filter === "pending" ||
+  params.filter === "overdue" ||
   params.filter === "today" ||
   params.filter === "followups" ||
   params.filter === "priorities"
     ? params.filter
-    : "overdue") as Filter;
+    : "pending") as Filter;
 
   const data = React.useMemo(() => applyFilter(tasks, filter), [tasks, filter]);
   const fmt = React.useCallback(
@@ -69,14 +74,29 @@ export default function TasksKpiList() {
     [dateFormat, timeFormat],
   );
 
+  const returnTo =
+    params.returnTo === "overview" || params.returnTo === "team"
+      ? (params.returnTo as "overview" | "team")
+      : null;
+
   const headerRight = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Close"
-      onPress={() => router.back()}
+      onPress={() => {
+        if (returnTo === "team") {
+          router.replace("/(tabs)/consolidated");
+          return;
+        }
+        if (returnTo === "overview") {
+          router.replace("/(tabs)/overview");
+          return;
+        }
+        router.back();
+      }}
       style={({ pressed }) => [{ padding: 6, opacity: pressed ? 0.7 : 1 }]}
     >
-      <Ionicons name="close" size={22} color={theme.foreground} />
+      <Ionicons name="close" size={18} color={theme.foreground} />
     </Pressable>
   );
 
@@ -104,7 +124,16 @@ export default function TasksKpiList() {
                 styles.rowCard,
                 { borderColor: theme.border, backgroundColor: theme.card, opacity: pressed ? 0.85 : 1 },
               ]}
-              onPress={() => router.push({ pathname: "/(tabs)/task/[id]", params: { id: item.id } })}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/task/[id]",
+                  params: {
+                    id: item.id,
+                    returnTo: returnTo ?? undefined,
+                    filter,
+                  },
+                })
+              }
             >
               <Text numberOfLines={2} style={[styles.taskTitle, { color: theme.foreground }]}>
                 {item.title}

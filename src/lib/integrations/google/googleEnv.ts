@@ -25,6 +25,14 @@ export function googleClientSecret(): string | undefined {
   );
 }
 
+/**
+ * iOS / native-style OAuth client ID used by the Expo app (`EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID`).
+ * Refresh tokens issued there must be refreshed with this client_id and **no** client_secret.
+ */
+export function googleMobileOAuthClientId(): string | undefined {
+  return cleanCredential(process.env.GOOGLE_MOBILE_OAUTH_CLIENT_ID) || undefined;
+}
+
 export function googleStateSecret(): string | undefined {
   return (
     process.env.GOOGLE_OAUTH_STATE_SECRET?.trim() ||

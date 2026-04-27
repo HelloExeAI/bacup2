@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -43,6 +44,15 @@ export function MeetingRecordingOverlay({ visible, onClose, session, onSaved }: 
   const startedAtRef = React.useRef<string>("");
   const transcriptRef = React.useRef<string>("");
 
+  const friendlySpeechInitError = React.useCallback((raw: unknown) => {
+    const msg = raw instanceof Error ? raw.message : String(raw ?? "");
+    const lower = msg.toLowerCase();
+    if (Platform.OS === "ios" && (lower.includes("recognizer") || lower.includes("speech") || lower.includes("assistant"))) {
+      return "Speech recognition isn’t available on the iOS Simulator. Use a physical iPhone development build and make sure Speech Recognition is enabled in Settings.";
+    }
+    return msg || "Could not start speech recognition.";
+  }, []);
+
   // Listen to speech native events only after the module is available (Expo Go won't have it).
   React.useEffect(() => {
     if (!speech) return;
@@ -53,7 +63,8 @@ export function MeetingRecordingOverlay({ visible, onClose, session, onSaved }: 
     });
     const subError = (speech.ExpoSpeechRecognitionModule as any).addListener?.("error", (ev: any) => {
       if (phase === "idle" || phase === "countdown") return;
-      setErrorMsg(String(ev?.message || ev?.error || "Speech recognition error"));
+      setPhase("idle");
+      setErrorMsg(friendlySpeechInitError(ev?.message || ev?.error || "Speech recognition error"));
     });
     return () => {
       try {
@@ -130,7 +141,8 @@ export function MeetingRecordingOverlay({ visible, onClose, session, onSaved }: 
         });
         setPhase("recording");
       } catch (e) {
-        setErrorMsg(e instanceof Error ? e.message : "Could not start speech recognition.");
+        setPhase("idle");
+        setErrorMsg(friendlySpeechInitError(e));
       }
     })();
     return () => {

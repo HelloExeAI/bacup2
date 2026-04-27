@@ -22,7 +22,7 @@ function coerceVoiceMode(v: unknown): UserSettingsRow["voice_input_mode"] {
 
 function coerceSensitivity(v: unknown): UserSettingsRow["voice_sensitivity"] {
   if (v === "low" || v === "medium" || v === "high") return v;
-  return "medium";
+  return "high";
 }
 
 function coerceBool(v: unknown, defaultTrue = true): boolean {
@@ -55,7 +55,8 @@ function coerceFollowupEmailBody(v: unknown): string {
 }
 
 function coerceDateDisplayFormat(v: unknown): UserSettingsRow["date_display_format"] {
-  return v === "dmy" || v === "mdy" ? v : "ymd";
+  if (v === "dmy" || v === "mdy" || v === "dmy_yy" || v === "dmy_mon_yy") return v;
+  return "ymd";
 }
 
 /**

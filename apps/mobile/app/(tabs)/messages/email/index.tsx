@@ -1,6 +1,8 @@
 import * as React from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
 
+import { MessagesBackButton } from "@/components/MessagesBackButton";
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -13,7 +15,7 @@ type AccountRow = {
   display_name: string | null;
 };
 
-export default function EmailTab() {
+export default function MessagesEmailAccounts() {
   const { user } = useAuth();
   const { theme } = useAppTheme();
   const [rows, setRows] = React.useState<AccountRow[]>([]);
@@ -45,13 +47,13 @@ export default function EmailTab() {
     }
   }
 
-  const label = (r: AccountRow) =>
-    (r.display_name && r.display_name.trim()) || r.account_email;
+  const label = (r: AccountRow) => (r.display_name && r.display_name.trim()) || r.account_email;
 
   return (
     <Screen
-      title="Connected email"
-      subtitle="Same `user_connected_accounts` rows as Settings → Integrations on the web. OAuth tokens stay on the server."
+      leading={<MessagesBackButton />}
+      title="Email"
+      subtitle="Open an account to see today’s inbox. Connect more under Settings → Integrations."
       scroll={false}
     >
       <FlatList
@@ -63,16 +65,25 @@ export default function EmailTab() {
         }
         ListEmptyComponent={
           <Text style={{ color: theme.mutedForeground, marginTop: 16 }}>
-            No connected accounts yet. Connect Google or Microsoft on the web app.
+            No connected accounts yet. Connect Google or Microsoft in Settings → Integrations.
           </Text>
         }
         contentContainerStyle={{ paddingBottom: 40 }}
         renderItem={({ item }) => (
-          <View style={[styles.card, { borderColor: theme.border, backgroundColor: theme.card }]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              router.push({ pathname: "/(tabs)/messages/email/[accountId]", params: { accountId: item.id } })
+            }
+            style={({ pressed }) => [
+              styles.card,
+              { borderColor: theme.border, backgroundColor: theme.card, opacity: pressed ? 0.9 : 1 },
+            ]}
+          >
             <Text style={[styles.title, { color: theme.foreground }]}>{label(item)}</Text>
             <Text style={[styles.sub, { color: theme.mutedForeground }]}>{item.account_email}</Text>
             <Text style={[styles.badge, { color: theme.accent }]}>{item.provider}</Text>
-          </View>
+          </Pressable>
         )}
       />
     </Screen>

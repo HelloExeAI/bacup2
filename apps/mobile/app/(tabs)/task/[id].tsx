@@ -7,7 +7,6 @@ import { Screen } from "@/components/Screen";
 import { useAuth } from "@/context/AuthContext";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useAppTheme } from "@/context/ThemeContext";
-import { getAppApiOrigin } from "@/lib/apiOrigin";
 import {
   datePlaceholder,
   formatDate,
@@ -23,15 +22,23 @@ function normalizeType(v: string): "todo" | "followup" | "reminder" {
   return v === "followup" || v === "reminder" ? v : "todo";
 }
 
+function typeLabel(t: "todo" | "followup" | "reminder") {
+  return t === "todo" ? "Todo" : t === "followup" ? "Followup" : "Reminder";
+}
+
 export default function TaskDetails() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { tasks, refreshData, session, user } = useAuth();
+  const { id, returnTo, filter, assignee } = useLocalSearchParams<{
+    id: string;
+    returnTo?: string;
+    filter?: string;
+    assignee?: string;
+  }>();
+  const { tasks, refreshData, user } = useAuth();
   const { theme } = useAppTheme();
   const { dateFormat, timeFormat } = usePreferences();
 
   const task = React.useMemo(() => tasks.find((t) => t.id === id), [tasks, id]);
   const [saving, setSaving] = React.useState(false);
-  const [redrafting, setRedrafting] = React.useState(false);
   const [commentsLoading, setCommentsLoading] = React.useState(false);
 
   const [title, setTitle] = React.useState("");
@@ -101,53 +108,75 @@ export default function TaskDetails() {
     await loadComments();
   }
 
+  const goBack = React.useCallback(() => {
+    if (returnTo === "team") {
+      const f = String(filter ?? "").trim();
+      if (f) {
+        router.replace({ pathname: "/(tabs)/tasks", params: { filter: f, returnTo: "team" } });
+      } else {
+        router.replace("/(tabs)/consolidated");
+      }
+      return;
+    }
+    if (returnTo === "overview") {
+      const f = String(filter ?? "").trim();
+      if (f) {
+        router.replace({ pathname: "/(tabs)/tasks", params: { filter: f, returnTo: "overview" } });
+      } else {
+        router.replace("/(tabs)/overview");
+      }
+      return;
+    }
+    if (returnTo === "assignee") {
+      const a = String(assignee ?? "").trim();
+      if (a) {
+        router.replace({ pathname: "/(tabs)/assignee/[name]", params: { name: a } });
+      } else {
+        router.replace("/(tabs)/consolidated");
+      }
+      return;
+    }
+    router.back();
+  }, [assignee, filter, returnTo]);
+
   const headerRight = (
     <View style={styles.headerActions}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Redraft with AI"
-        disabled={saving || redrafting}
-        onPress={() => void redraft()}
-        style={({ pressed }) => [{ padding: 6, opacity: saving || redrafting ? 0.4 : pressed ? 0.7 : 1 }]}
-      >
-        <Ionicons name="sparkles" size={20} color={theme.accent} />
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
         accessibilityLabel="Save"
-        disabled={saving || redrafting}
+        disabled={saving}
         onPress={() => void save()}
-        style={({ pressed }) => [{ padding: 6, opacity: saving || redrafting ? 0.4 : pressed ? 0.7 : 1 }]}
+        style={({ pressed }) => [{ padding: 6, opacity: saving ? 0.4 : pressed ? 0.7 : 1 }]}
       >
-        <Ionicons name="save-outline" size={20} color={theme.foreground} />
+        <Ionicons name="save-outline" size={18} color={theme.foreground} />
       </Pressable>
       {task?.status === "pending" ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Mark complete"
-          disabled={saving || redrafting}
+          disabled={saving}
           onPress={() => void markComplete()}
-          style={({ pressed }) => [{ padding: 6, opacity: saving || redrafting ? 0.4 : pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [{ padding: 6, opacity: saving ? 0.4 : pressed ? 0.7 : 1 }]}
         >
-          <Ionicons name="checkmark-circle-outline" size={22} color="#16a34a" />
+          <Ionicons name="checkmark-circle-outline" size={18} color="#16a34a" />
         </Pressable>
       ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Delete"
-        disabled={saving || redrafting}
+        disabled={saving}
         onPress={() => remove()}
-        style={({ pressed }) => [{ padding: 6, opacity: saving || redrafting ? 0.4 : pressed ? 0.7 : 1 }]}
+        style={({ pressed }) => [{ padding: 6, opacity: saving ? 0.4 : pressed ? 0.7 : 1 }]}
       >
-        <Ionicons name="trash-outline" size={20} color="#dc2626" />
+        <Ionicons name="trash-outline" size={18} color="#dc2626" />
       </Pressable>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close"
-        onPress={() => router.back()}
+        onPress={() => goBack()}
         style={({ pressed }) => [{ padding: 6, opacity: pressed ? 0.7 : 1 }]}
       >
-        <Ionicons name="close" size={22} color={theme.foreground} />
+        <Ionicons name="close" size={18} color={theme.foreground} />
       </Pressable>
     </View>
   );
@@ -195,63 +224,9 @@ export default function TaskDetails() {
         return;
       }
       await refreshData();
-      router.back();
+      goBack();
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function redraft() {
-    const origin = getAppApiOrigin();
-    if (!origin) {
-      Alert.alert("API URL missing", "Set EXPO_PUBLIC_APP_URL in apps/mobile/.env to enable AI redrafting.");
-      return;
-    }
-    const token = session?.access_token;
-    if (!token) {
-      Alert.alert("Not signed in", "Sign in to use AI redrafting.");
-      return;
-    }
-    const nextTitle = title.trim();
-    if (!nextTitle) {
-      Alert.alert("Missing title", "Add a title first.");
-      return;
-    }
-
-    setRedrafting(true);
-    try {
-      const res = await fetch(`${origin}/api/mobile/tasks/redraft`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: nextTitle,
-          description: description.trim() || null,
-          due_date: parseDate(dueDate, dateFormat) || undefined,
-          due_time: parseTime(dueTime, timeFormat) || undefined,
-          assigned_to: assignedTo.trim() || undefined,
-          type,
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as
-        | { error?: string; title?: string; description?: string; assigned_to?: string }
-        | null;
-      if (!res.ok) {
-        Alert.alert("AI redraft failed", json?.error || `Request failed (${res.status})`);
-        return;
-      }
-      const t = String(json?.title ?? "").trim();
-      const d = String(json?.description ?? "").trim();
-      const a = String(json?.assigned_to ?? "").trim();
-      if (t) setTitle(t);
-      if (d) setDescription(d);
-      if (a) setAssignedTo(a);
-    } catch (e) {
-      Alert.alert("AI redraft failed", e instanceof Error ? e.message : "Network error");
-    } finally {
-      setRedrafting(false);
     }
   }
 
@@ -271,7 +246,7 @@ export default function TaskDetails() {
         return;
       }
       await refreshData();
-      router.back();
+      goBack();
     } finally {
       setSaving(false);
     }
@@ -297,7 +272,7 @@ export default function TaskDetails() {
                 return;
               }
               await refreshData();
-              router.back();
+              goBack();
             } finally {
               setSaving(false);
             }
@@ -397,7 +372,7 @@ export default function TaskDetails() {
                   },
                 ]}
               >
-                <Text style={[styles.pillText, { color: theme.foreground }]}>{k}</Text>
+                <Text style={[styles.pillText, { color: theme.foreground }]}>{typeLabel(k)}</Text>
               </Pressable>
             ))}
           </View>
@@ -412,7 +387,7 @@ export default function TaskDetails() {
           ) : (
             <View style={{ paddingTop: 8 }}>
               {comments.map((item) => (
-                <View style={[styles.commentRow, { borderColor: theme.border }]}>
+                <View key={item.id} style={[styles.commentRow, { borderColor: theme.border }]}>
                   <Text style={[styles.commentBody, { color: theme.foreground }]}>{item.body}</Text>
                   <Text style={[styles.commentMeta, { color: theme.mutedForeground }]}>
                     {String((item as any).author_name || (item as any).author_kind || "user")} ·{" "}

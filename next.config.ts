@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    // Prevent Turbopack from inferring the wrong monorepo root (it was picking /Users/farooq/),
+    // which breaks module resolution (e.g. "Can't resolve 'tailwindcss' in '/Users/farooq/Desktop'").
+    root: __dirname,
+  },
   async redirects() {
     return [
       {

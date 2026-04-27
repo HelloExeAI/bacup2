@@ -23,6 +23,7 @@ export default function TabsLayout() {
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.mutedForeground,
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarIconStyle: { marginBottom: -2 },
       }}
     >
       <Tabs.Screen
@@ -47,38 +48,51 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="assignee/[name]"
+        options={{
+          // Hidden screen used for assignee drill-down.
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="team-inbox/[kind]"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="meetings"
         options={{
           title: "Meetings",
-          tabBarIcon: ({ color, size }) => <Ionicons name="videocam-outline" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="videocam-outline" size={18} color={color} />,
         }}
       />
       <Tabs.Screen
         name="consolidated"
         options={{
-          title: "Consolidated",
-          tabBarIcon: ({ color, size }) => <Ionicons name="layers-outline" size={size} color={color} />,
+          title: "Team",
+          tabBarIcon: ({ color }) => <Ionicons name="layers-outline" size={18} color={color} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
           title: "Calendar",
-          tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={18} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="email"
+        name="messages"
         options={{
-          title: "Email",
-          tabBarIcon: ({ color, size }) => <Ionicons name="mail-outline" size={size} color={color} />,
+          title: "Messages",
+          tabBarIcon: ({ color }) => <Ionicons name="chatbubbles-outline" size={18} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="user-settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="settings-outline" size={18} color={color} />,
         }}
       />
     </Tabs>

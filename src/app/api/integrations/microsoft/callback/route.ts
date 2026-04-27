@@ -55,8 +55,11 @@ export async function GET(req: Request) {
   }
 
   let stateUserId: string;
+  let returnTo: string | undefined;
   try {
-    stateUserId = decodeMicrosoftOAuthState(state).userId;
+    const decoded = decodeMicrosoftOAuthState(state);
+    stateUserId = decoded.userId;
+    returnTo = decoded.returnTo;
   } catch {
     return finishRedirect(req, { integrations: "microsoft_error", reason: "bad_state" });
   }
@@ -67,9 +70,7 @@ export async function GET(req: Request) {
     error: userErr,
   } = await supabase.auth.getUser();
 
-  if (userErr || !user || user.id !== stateUserId) {
-    return finishRedirect(req, { integrations: "microsoft_error", reason: "session" });
-  }
+  const authedUser = !userErr && user && user.id === stateUserId ? user : null;
 
   try {
     const redirectUri = microsoftRedirectUriFromRequest(req);
@@ -85,7 +86,7 @@ export async function GET(req: Request) {
     const { data: existing } = await db
       .from("user_connected_accounts")
       .select("id, refresh_token")
-      .eq("user_id", user.id)
+      .eq("user_id", stateUserId)
       .eq("provider", "microsoft")
       .eq("account_email", accountEmail)
       .maybeSingle();
@@ -93,7 +94,7 @@ export async function GET(req: Request) {
     const refreshToken = tokens.refresh_token ?? (existing as { refresh_token?: string } | null)?.refresh_token ?? null;
 
     const row = {
-      user_id: user.id,
+      user_id: stateUserId,
       provider: "microsoft" as const,
       account_email: accountEmail,
       provider_subject: profile.id,
@@ -114,7 +115,7 @@ export async function GET(req: Request) {
           scopes: row.scopes,
         })
         .eq("id", existing.id)
-        .eq("user_id", user.id);
+        .eq("user_id", stateUserId);
 
       if (upErr) throw upErr;
     } else {
@@ -130,7 +131,7 @@ export async function GET(req: Request) {
               token_expires_at: row.token_expires_at,
               scopes: row.scopes,
             })
-            .eq("user_id", user.id)
+            .eq("user_id", stateUserId)
             .eq("provider", "microsoft")
             .eq("account_email", accountEmail);
           if (upErr2) throw upErr2;
@@ -142,23 +143,30 @@ export async function GET(req: Request) {
 
     let avatarPublicUrl: string | null = null;
     try {
-      avatarPublicUrl = await uploadMicrosoftGraphPhotoToAvatar(supabase, user.id, tokens.access_token);
+      avatarPublicUrl = await uploadMicrosoftGraphPhotoToAvatar(db, stateUserId, tokens.access_token);
     } catch {
       /* optional */
     }
 
-    await mergePrimaryOAuthIntoProfile(supabase, {
-      userId: user.id,
-      authEmail: user.email,
-      oauthEmail: accountEmail,
-      patch: {
-        first_name: profile.givenName,
-        last_name: profile.surname,
-        full_name: profile.displayName,
-        avatar_url: avatarPublicUrl,
-      },
-    });
+    if (authedUser) {
+      await mergePrimaryOAuthIntoProfile(db, {
+        userId: stateUserId,
+        authEmail: authedUser.email,
+        oauthEmail: accountEmail,
+        patch: {
+          first_name: profile.givenName,
+          last_name: profile.surname,
+          full_name: profile.displayName,
+          avatar_url: avatarPublicUrl,
+        },
+      });
+    }
 
+    if (returnTo && returnTo.startsWith("bacup://")) {
+      const u = new URL(returnTo);
+      u.searchParams.set("integrations", "microsoft_connected");
+      return NextResponse.redirect(u.toString());
+    }
     return finishRedirect(req, { integrations: "microsoft_connected" }, "/settings");
   } catch (e) {
     console.error("[microsoft/oauth/callback]", e);
@@ -171,6 +179,13 @@ export async function GET(req: Request) {
       if (e.message.includes("Failed to load Microsoft profile")) reason = "profile";
       else if (e.message.includes("Microsoft profile missing")) reason = "profile_email";
       detail = e.message.slice(0, 180);
+    }
+    if (returnTo && returnTo.startsWith("bacup://")) {
+      const u = new URL(returnTo);
+      u.searchParams.set("integrations", "microsoft_error");
+      u.searchParams.set("reason", reason);
+      if (detail) u.searchParams.set("detail", detail);
+      return NextResponse.redirect(u.toString());
     }
     return finishRedirect(req, { integrations: "microsoft_error", reason, ...(detail ? { detail } : {}) });
   }

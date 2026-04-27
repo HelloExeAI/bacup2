@@ -7,6 +7,7 @@ import { useAppTheme } from "@/context/ThemeContext";
 export function Screen({
   title,
   subtitle,
+  leading,
   headerRight,
   children,
   scroll = true,
@@ -14,6 +15,8 @@ export function Screen({
 }: {
   title: string;
   subtitle?: string;
+  /** e.g. back control above the title row */
+  leading?: React.ReactNode;
   /** e.g. toolbar icons aligned to the title row */
   headerRight?: React.ReactNode;
   children: React.ReactNode;
@@ -24,6 +27,7 @@ export function Screen({
 
   const header = (
     <View style={styles.header}>
+      {leading ? <View style={styles.leadingWrap}>{leading}</View> : null}
       <View style={styles.headerRow}>
         <View style={styles.headerTextCol}>
           <Text style={[styles.title, { color: theme.foreground }]}>{title}</Text>
@@ -58,11 +62,12 @@ export function Screen({
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   fill: { flex: 1 },
-  scroll: { padding: 16, paddingBottom: 32 },
-  header: { marginBottom: 16 },
+  scroll: { padding: 14, paddingBottom: 28 },
+  header: { marginBottom: 12 },
+  leadingWrap: { marginBottom: 4 },
   headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
   headerTextCol: { flex: 1, minWidth: 0 },
   headerRightWrap: { flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 2 },
-  title: { fontSize: 22, fontWeight: "700", letterSpacing: 0.3 },
-  subtitle: { marginTop: 6, fontSize: 13, lineHeight: 18 },
+  title: { fontSize: 15, fontWeight: "800", letterSpacing: 0.2 },
+  subtitle: { marginTop: 4, fontSize: 11, lineHeight: 15 },
 });

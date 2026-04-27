@@ -4,7 +4,7 @@ import * as React from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 
-export type DateFormat = "ymd" | "dmy" | "mdy";
+export type DateFormat = "ymd" | "dmy" | "mdy" | "dmy_yy" | "dmy_mon_yy";
 export type TimeFormat = "24h" | "12h";
 
 type Prefs = {
@@ -12,6 +12,8 @@ type Prefs = {
   timeFormat: TimeFormat;
   setDateFormat: (v: DateFormat) => void;
   setTimeFormat: (v: TimeFormat) => void;
+  /** Align local chips + storage with `user_settings` after a web/mobile settings API save. */
+  syncFromUserSettings: (row: { date_display_format?: unknown; clock_display_format?: unknown }) => void;
 };
 
 const STORAGE_DATE = "bacup:pref:date-format";
@@ -29,7 +31,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     void (async () => {
       const d = await AsyncStorage.getItem(STORAGE_DATE);
       const t = await AsyncStorage.getItem(STORAGE_TIME);
-      if (d === "ymd" || d === "dmy" || d === "mdy") setDateFormatState(d);
+      if (d === "ymd" || d === "dmy" || d === "mdy" || d === "dmy_yy" || d === "dmy_mon_yy") setDateFormatState(d);
       if (t === "24h" || t === "12h") setTimeFormatState(t);
     })();
   }, []);
@@ -50,7 +52,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       if (error) return;
       const d = String((data as any)?.date_display_format ?? "").trim();
       const c = String((data as any)?.clock_display_format ?? "").trim();
-      if (d === "ymd" || d === "dmy" || d === "mdy") setDateFormatState(d);
+      if (d === "ymd" || d === "dmy" || d === "mdy" || d === "dmy_yy" || d === "dmy_mon_yy") setDateFormatState(d);
       if (c === "12h" || c === "24h") setTimeFormatState(c === "24h" ? "24h" : "12h");
     })();
     return () => {
@@ -78,9 +80,23 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     }
   }, [userId]);
 
+  const syncFromUserSettings = React.useCallback((row: { date_display_format?: unknown; clock_display_format?: unknown }) => {
+    const d = String(row.date_display_format ?? "").trim();
+    const c = String(row.clock_display_format ?? "").trim();
+    if (d === "ymd" || d === "dmy" || d === "mdy" || d === "dmy_yy" || d === "dmy_mon_yy") {
+      setDateFormatState(d);
+      void AsyncStorage.setItem(STORAGE_DATE, d);
+    }
+    if (c === "12h" || c === "24h") {
+      const tf: TimeFormat = c === "24h" ? "24h" : "12h";
+      setTimeFormatState(tf);
+      void AsyncStorage.setItem(STORAGE_TIME, tf);
+    }
+  }, []);
+
   const value = React.useMemo(
-    () => ({ dateFormat, timeFormat, setDateFormat, setTimeFormat }),
-    [dateFormat, timeFormat, setDateFormat, setTimeFormat],
+    () => ({ dateFormat, timeFormat, setDateFormat, setTimeFormat, syncFromUserSettings }),
+    [dateFormat, timeFormat, setDateFormat, setTimeFormat, syncFromUserSettings],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

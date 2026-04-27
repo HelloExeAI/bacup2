@@ -15,6 +15,7 @@ import {
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
+import { getAppApiOrigin } from "@/lib/apiOrigin";
 import { getSupabase } from "@/lib/supabase";
 import { ymdToday } from "@/lib/taskStats";
 
@@ -33,6 +34,7 @@ type TimelineItem =
       id: string;
       title: string;
       time: string | null;
+      provider?: string | null;
     };
 
 function fmtTime(t: string | null | undefined) {
@@ -45,12 +47,29 @@ function sortKeyTime(t: string | null | undefined) {
   return String(t).slice(0, 5);
 }
 
+function ymdToLocalDate(ymd: string) {
+  // Interpret YYYY-MM-DD as a local day (not UTC) to match user expectations.
+  const [y, m, d] = ymd.split("-").map((x) => Number(x));
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+}
+
+function formatAgendaHeader(ymd: string) {
+  const dt = ymdToLocalDate(ymd);
+  const weekday = new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(dt);
+  const dayMonth = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long" }).format(dt);
+  return { weekday, dayMonth };
+}
+
 export default function CalendarTab() {
-  const { tasks, events, refreshData, user } = useAuth();
+  const { tasks, events, refreshData, user, session } = useAuth();
   const { theme } = useAppTheme();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const today = React.useMemo(() => ymdToday(), []);
+
+  const [remoteEvents, setRemoteEvents] = React.useState<Array<{ id: string; title: string; time: string | null; provider?: string }>>(
+    [],
+  );
 
   const [createOpen, setCreateOpen] = React.useState(false);
   const [detailsOpen, setDetailsOpen] = React.useState(false);
@@ -92,6 +111,17 @@ export default function CalendarTab() {
         id: e.id,
         title: (e.title ?? "Untitled").trim() || "Untitled",
         time: e.time ?? null,
+        provider: "local",
+      });
+    }
+
+    for (const e of remoteEvents) {
+      list.push({
+        kind: "event",
+        id: e.id,
+        title: (e.title ?? "Untitled").trim() || "Untitled",
+        time: e.time ?? null,
+        provider: e.provider ?? "calendar",
       });
     }
 
@@ -101,16 +131,58 @@ export default function CalendarTab() {
       return ak.localeCompare(bk) || a.title.localeCompare(b.title);
     });
     return list;
-  }, [tasks, events, today]);
+  }, [tasks, events, remoteEvents, today]);
+
+  const loadRemote = React.useCallback(async () => {
+    const token = session?.access_token ?? "";
+    const origin = getAppApiOrigin();
+    if (!token || !origin) {
+      setRemoteEvents([]);
+      return;
+    }
+    try {
+      const tzOffsetMinutes = new Date().getTimezoneOffset();
+      const res = await fetch(
+        `${origin}/api/mobile/calendar/today?date=${encodeURIComponent(today)}&tzOffsetMinutes=${encodeURIComponent(String(tzOffsetMinutes))}`,
+        {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store",
+        },
+      );
+      const j = (await res.json().catch(() => null)) as any;
+      if (!res.ok) {
+        setRemoteEvents([]);
+        return;
+      }
+      const rows = Array.isArray(j?.events) ? j.events : [];
+      setRemoteEvents(
+        rows
+          .filter((x: any) => x && typeof x === "object")
+          .map((x: any) => ({
+            id: String(x.id ?? ""),
+            title: String(x.title ?? ""),
+            time: x.time == null ? null : String(x.time),
+            provider: String(x.provider ?? "google"),
+          }))
+          .filter((x: any) => x.id && x.title),
+      );
+    } catch {
+      setRemoteEvents([]);
+    }
+  }, [session?.access_token, today]);
 
   async function onRefresh() {
     setRefreshing(true);
     try {
-      await refreshData();
+      await Promise.all([refreshData(), loadRemote()]);
     } finally {
       setRefreshing(false);
     }
   }
+
+  React.useEffect(() => {
+    void loadRemote();
+  }, [loadRemote]);
 
   function openCreate() {
     setDraftTitle("");
@@ -216,9 +288,11 @@ export default function CalendarTab() {
 
   const headerRight = (
     <Pressable accessibilityRole="button" accessibilityLabel="Create calendar item" onPress={openCreate} style={styles.iconBtn}>
-      <Ionicons name="add-circle" size={26} color={theme.accent} />
+      <Ionicons name="add-circle" size={20} color={theme.accent} />
     </Pressable>
   );
+
+  const headerMeta = React.useMemo(() => formatAgendaHeader(today), [today]);
 
   return (
     <>
@@ -229,6 +303,19 @@ export default function CalendarTab() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={theme.accent} />
           }
+          ListHeaderComponent={
+            <View style={styles.agendaHeader}>
+              <View style={styles.agendaHeaderRow}>
+                <Text style={[styles.agendaHeaderText, { color: theme.accent }]}>
+                  Today <Text style={{ color: theme.mutedForeground }}>•</Text> {headerMeta.weekday}{" "}
+                  <Text style={{ color: theme.mutedForeground }}>•</Text> {headerMeta.dayMonth}
+                </Text>
+                <View style={styles.agendaHeaderChevron}>
+                  <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
+                </View>
+              </View>
+            </View>
+          }
           ListEmptyComponent={
             <Text style={{ color: theme.mutedForeground, marginTop: 16 }}>
               No items scheduled for today. Tap + to add one.
@@ -238,23 +325,37 @@ export default function CalendarTab() {
           renderItem={({ item }) => (
             <Pressable
               onPress={() => openDetails(item)}
-              style={[styles.row, { borderColor: theme.border, backgroundColor: theme.card }]}
+              style={[styles.agendaRow, { borderColor: theme.border, backgroundColor: theme.card }]}
             >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.title, { color: theme.foreground }]} numberOfLines={1}>
-                  {item.title}
+              <View style={styles.timeCol}>
+                <Text style={[styles.timeText, { color: theme.foreground }]}>
+                  {item.kind === "task" ? fmtTime(item.due_time) : fmtTime(item.time)}
                 </Text>
-                <Text style={[styles.meta, { color: theme.mutedForeground }]}>
-                  {item.kind === "task"
-                    ? `${fmtTime(item.due_time)} · ${item.type ?? "todo"}`
-                    : `${fmtTime(item.time)} · calendar`}
+                <Text style={[styles.durationText, { color: theme.mutedForeground }]}>
+                  {item.kind === "task" ? (item.type ?? "task") : "event"}
                 </Text>
               </View>
-              {item.kind === "task" ? (
-                <Ionicons name="checkmark-circle-outline" size={20} color={theme.mutedForeground} />
-              ) : (
-                <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
-              )}
+
+              <View style={[styles.accentBar, { backgroundColor: theme.accent }]} />
+
+              <View style={styles.contentCol}>
+                <Text style={[styles.agendaTitle, { color: theme.foreground }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={[styles.agendaMeta, { color: theme.mutedForeground }]} numberOfLines={1}>
+                  {item.kind === "task"
+                    ? `${item.assigned_to ? `@${item.assigned_to}` : "assigned"} · ${item.status}`
+                    : `${item.provider ?? "calendar"} · today`}
+                </Text>
+              </View>
+
+              <View style={styles.trailingIcon}>
+                {item.kind === "task" ? (
+                  <Ionicons name="checkmark-circle-outline" size={18} color={theme.mutedForeground} />
+                ) : (
+                  <Ionicons name="chevron-forward" size={16} color={theme.mutedForeground} />
+                )}
+              </View>
             </Pressable>
           )}
         />
@@ -404,9 +505,30 @@ export default function CalendarTab() {
 
 const styles = StyleSheet.create({
   iconBtn: { padding: 8 },
-  row: { borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 10, flexDirection: "row", alignItems: "center", gap: 10 },
-  title: { fontSize: 15, fontWeight: "700" },
-  meta: { marginTop: 4, fontSize: 12 },
+  agendaHeader: { paddingTop: 6, paddingBottom: 12 },
+  agendaHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  agendaHeaderText: { fontSize: 12, fontWeight: "800", letterSpacing: 0.2 },
+  agendaHeaderChevron: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+
+  agendaRow: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  timeCol: { width: 64, alignItems: "flex-start" },
+  timeText: { fontSize: 13, fontWeight: "800" },
+  durationText: { marginTop: 4, fontSize: 11, fontWeight: "700" },
+  accentBar: { width: 4, alignSelf: "stretch", borderRadius: 999 },
+  contentCol: { flex: 1, minWidth: 0 },
+  agendaTitle: { fontSize: 14, fontWeight: "800" },
+  agendaMeta: { marginTop: 4, fontSize: 12 },
+  trailingIcon: { width: 22, alignItems: "flex-end" },
+
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 24 },
   modalCard: { borderRadius: 16, borderWidth: 1, padding: 16 },
   modalTitle: { fontSize: 17, fontWeight: "800", marginBottom: 10, textAlign: "center" },

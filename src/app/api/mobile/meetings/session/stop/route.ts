@@ -1,24 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-import { getSupabaseEnv } from "@/lib/supabase/env";
 import {
   MeetingSessionStopBodySchema,
   processMeetingSessionStop,
 } from "@/lib/meetings/processMeetingSessionStop";
+import { supabaseFromBearer } from "@/lib/supabase/bearerFromRequest";
 
 export const dynamic = "force-dynamic";
-
-function supabaseFromBearer(req: Request) {
-  const raw = req.headers.get("authorization")?.trim();
-  const token = raw?.toLowerCase().startsWith("bearer ") ? raw.slice(7).trim() : null;
-  if (!token) return null;
-  const { url, anonKey } = getSupabaseEnv();
-  return createClient(url, anonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-}
 
 /**
  * Same body and behavior as POST /api/meetings/session/stop, but authenticates with
